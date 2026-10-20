@@ -110,7 +110,12 @@ class _BulkImportScreenState extends ConsumerState<BulkImportScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Impor Massal Dokumen')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + MediaQuery.paddingOf(context).bottom,
+        ),
         children: [
           OutlinedButton.icon(
             icon: const Icon(Icons.attach_file_rounded),

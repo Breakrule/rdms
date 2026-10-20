@@ -1,3 +1,8 @@
+import 'dart:typed_data';
+
+// ignore: depend_on_referenced_packages
+import 'package:cross_file/cross_file.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -122,4 +127,117 @@ void main() {
       expect(find.text('Tambah / Impor Dokumen'), findsNothing);
     },
   );
+
+  testWidgets(
+    'AddDocumentModal handles picked file preview on compact mobile screen without RenderFlex overflow',
+    (WidgetTester tester) async {
+      // Simulate compact Android mobile viewport (360x740) with 48dp system navigation inset
+      tester.view.physicalSize = const Size(360, 740);
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.padding = const FakeViewPadding(bottom: 48, top: 24);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetPadding();
+      });
+
+      final pickedFile = _TestPlatformFile(
+        name: 'Surat_Keputusan_Direktur_Utama_2026.pdf',
+        path: '/dummy/path/Surat_Keputusan_Direktur_Utama_2026.pdf',
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: AddDocumentModal(initialPickedFile: pickedFile),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify file name is displayed with ellipsis and doesn't overflow
+      expect(
+        find.text('Surat_Keputusan_Direktur_Utama_2026.pdf'),
+        findsOneWidget,
+      );
+      expect(find.text('• Siap diimpor'), findsOneWidget);
+
+      // Verify action buttons
+      expect(find.byTooltip('Ganti berkas'), findsOneWidget);
+      expect(find.byTooltip('Hapus berkas'), findsOneWidget);
+
+      // Verify footer actions exist and are visible
+      expect(find.text('Batal'), findsOneWidget);
+      expect(find.text('Simpan & Impor Dokumen'), findsOneWidget);
+
+      // Ensure no exceptions or RenderFlex overflow occurred
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'AddDocumentModal renders on ultra-narrow 320px screen with text scaling without overflow',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 600);
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.padding = const FakeViewPadding(bottom: 48, top: 24);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetPadding();
+      });
+
+      final pickedFile = _TestPlatformFile(
+        name: 'Dokumen_Sangat_Panjang_Sekali_Untuk_Uji_Coba_Responsif_2026.docx',
+        path: '/dummy/Dokumen_Sangat_Panjang_Sekali_Untuk_Uji_Coba_Responsif_2026.docx',
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: MediaQuery(
+              data: const MediaQueryData(
+                textScaler: TextScaler.linear(1.4),
+                viewPadding: EdgeInsets.only(bottom: 48, top: 24),
+              ),
+              child: Scaffold(
+                body: AddDocumentModal(initialPickedFile: pickedFile),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
+
+base class _TestPlatformFile extends PlatformFile {
+  _TestPlatformFile({required this.name, required String path})
+      : uri = Uri.file(path);
+
+  @override
+  final String name;
+
+  @override
+  final Uri uri;
+
+  @override
+  XFile get xFile => XFile(path ?? '');
+
+  @override
+  int? lengthSync() => 1048576;
+
+  @override
+  Future<int?> length() async => 1048576;
+
+  @override
+  Future<Uint8List> readAsBytes() async => Uint8List(0);
+
+  @override
+  Stream<Uint8List> readAsByteStream() => const Stream.empty();
+}
+
+

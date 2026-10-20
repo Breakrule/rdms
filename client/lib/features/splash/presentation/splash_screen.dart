@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,36 +40,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     // Subtle, gentle entrance: logo starts almost full size (0.92 -> 1.0)
     // so it is immediately legible on frame 0 without black/blank lag
-    _logoScale = Tween<double>(begin: 0.92, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _logoScale = Tween<double>(
+      begin: 0.92,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     // Fade starts at 0.85 to ensure instant visibility on first paint
-    _contentFade = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeOut,
-      ),
-    );
+    _contentFade = Tween<double>(
+      begin: 0.85,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
     _contentSlide = Tween<Offset>(
       begin: const Offset(0, 0.05),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     _glowPulse = Tween<double>(begin: 0.95, end: 1.1).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeInOutSine,
-      ),
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOutSine),
     );
 
     _controller.forward();
@@ -81,8 +70,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           transitionDuration: const Duration(milliseconds: 400),
           pageBuilder: (context, animation, secondaryAnimation) =>
               const DocumentExplorerScreen(),
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) {
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
         ),
@@ -113,8 +101,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0B1220) : const Color(0xFFF6F8FC),
+      backgroundColor: isDark
+          ? const Color(0xFF0B1220)
+          : const Color(0xFFF6F8FC),
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -153,9 +142,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF0F52BA).withValues(
-                            alpha: isDark ? 0.35 : 0.20,
-                          ),
+                          color: const Color(0xFF0F52BA)
+                              .withValues(alpha: isDark ? 0.35 : 0.20),
                           blurRadius: 70,
                           spreadRadius: 20,
                         ),
@@ -186,8 +174,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               : Colors.white.withValues(alpha: 0.95),
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(
-                            color:
-                                const Color(0xFF0F52BA).withValues(alpha: 0.35),
+                            color: const Color(0xFF0F52BA)
+                                .withValues(alpha: 0.35),
                             width: 1.5,
                           ),
                           boxShadow: [
@@ -208,10 +196,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) =>
                                 const Icon(
-                              Icons.folder_special_rounded,
-                              size: 80,
-                              color: Color(0xFF0F52BA),
-                            ),
+                                  Icons.folder_special_rounded,
+                                  size: 80,
+                                  color: Color(0xFF0F52BA),
+                                ),
                           ),
                         ),
                       ),
@@ -260,41 +248,44 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           Positioned(
             left: 0,
             right: 0,
-            bottom: 48,
-            child: Column(
-              children: [
-                AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, child) {
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: SizedBox(
-                        width: 140,
-                        height: 3,
-                        child: LinearProgressIndicator(
-                          value: _controller.value,
-                          backgroundColor:
-                              const Color(0xFF0F52BA).withValues(alpha: 0.15),
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            Color(0xFF0F52BA),
+            bottom: 24 + MediaQuery.paddingOf(context).bottom,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  AnimatedBuilder(
+                    animation: _controller,
+                    builder: (context, child) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: SizedBox(
+                          width: 140,
+                          height: 3,
+                          child: LinearProgressIndicator(
+                            value: _controller.value,
+                            backgroundColor: const Color(0xFF0F52BA)
+                                .withValues(alpha: 0.15),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFF0F52BA),
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'Offline-First • Cloud Synchronized',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 0.5,
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.40)
-                        : const Color(0xFF64748B),
+                      );
+                    },
                   ),
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  Text(
+                    'Offline-First • Cloud Synchronized',
+                    style: TextStyle(
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.40)
+                          : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

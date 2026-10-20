@@ -53,6 +53,9 @@ class SyncCenterScreen extends ConsumerWidget {
         ],
       ),
       body: ListView(
+        padding: EdgeInsets.only(
+          bottom: 16 + MediaQuery.paddingOf(context).bottom,
+        ),
         children: [
           if (progress != null && progress.isRunning)
             LinearProgressIndicator(value: progress.percentage),

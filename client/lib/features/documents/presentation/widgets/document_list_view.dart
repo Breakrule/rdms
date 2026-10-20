@@ -97,9 +97,11 @@ class DocumentListView extends ConsumerWidget {
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppTheme.space24,
-                  vertical: AppTheme.space48,
+                padding: EdgeInsets.fromLTRB(
+                  AppTheme.space24,
+                  AppTheme.space48,
+                  AppTheme.space24,
+                  AppTheme.space48 + MediaQuery.paddingOf(context).bottom,
                 ),
                 alignment: Alignment.center,
                 child: _buildEmptyState(
@@ -137,7 +139,11 @@ class DocumentListView extends ConsumerWidget {
                 },
                 child: ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: AppTheme.space48),
+                  padding: EdgeInsets.only(
+                    bottom: AppTheme.space48 +
+                        MediaQuery.paddingOf(context).bottom +
+                        32,
+                  ),
                   itemCount: docs.length,
                   separatorBuilder: (_, _) => Divider(
                     height: 1,

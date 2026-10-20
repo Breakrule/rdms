@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -115,10 +117,20 @@ class _CloudSyncSettingsModalState
     final isConnected =
         googleUser != null || _tokenController.text.trim().isNotEmpty;
 
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final bottomInset =
+        math.max(20.0, viewPadding.bottom + 12.0 + viewInsets.bottom);
+    final topInset = math.max(20.0, viewPadding.top + 8.0);
+
     return Dialog(
+      insetPadding: EdgeInsets.fromLTRB(16, topInset, 16, bottomInset),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: BoxConstraints(
+          maxWidth: 520,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+        ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(

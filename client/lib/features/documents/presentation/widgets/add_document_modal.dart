@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +14,9 @@ import '../providers/document_providers.dart';
 enum DuplicateChoice { cancel, keepSeparate }
 
 class AddDocumentModal extends ConsumerStatefulWidget {
-  const AddDocumentModal({super.key});
+  final PlatformFile? initialPickedFile;
+
+  const AddDocumentModal({super.key, this.initialPickedFile});
 
   @override
   ConsumerState<AddDocumentModal> createState() => _AddDocumentModalState();
@@ -31,6 +34,15 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
   PlatformFile? _pickedFile;
   bool _isLoading = false;
   bool _isHoveringDropzone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPickedFile != null) {
+      _pickedFile = widget.initialPickedFile;
+      _titleController.text = _pickedFile!.name.split('.').first;
+    }
+  }
 
   static List<int> get _fiscalYears {
     final current = DateTime.now().year;
@@ -254,6 +266,12 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
         ? const Color(0xFF94A3B8)
         : const Color(0xFF64748B);
 
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final topPadding = math.max(16.0, viewPadding.top + 8.0);
+    final bottomPadding =
+        math.max(16.0, viewPadding.bottom + 12.0 + viewInsets.bottom);
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -265,13 +283,13 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
       },
       child: Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        insetPadding: EdgeInsets.fromLTRB(16, topPadding, 16, bottomPadding),
         elevation: 0,
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: 620,
-              maxHeight: MediaQuery.of(context).size.height * 0.90,
+              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
             ),
             child: Container(
               decoration: BoxDecoration(
@@ -491,13 +509,17 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
           children: [
             Icon(icon, size: 14, color: const Color(0xFF0F52BA)),
             const SizedBox(width: 6),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-                color: Color(0xFF0F52BA),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: Color(0xFF0F52BA),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -562,15 +584,15 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: meta.$2.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(meta.$1, color: meta.$2, size: 24),
+              child: Icon(meta.$1, color: meta.$2, size: 22),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,13 +601,14 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                     _pickedFile!.name,
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
-                      fontSize: 13.5,
+                      fontSize: 13,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -599,9 +622,11 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                         ),
                         child: Text(
                           _formatBytes(
-                            _pickedFile!.path != null
-                                ? File(_pickedFile!.path!).lengthSync()
-                                : 0,
+                            _pickedFile!.lengthSync() ??
+                                (_pickedFile!.path != null &&
+                                        File(_pickedFile!.path!).existsSync()
+                                    ? File(_pickedFile!.path!).lengthSync()
+                                    : 0),
                           ),
                           style: const TextStyle(
                             fontSize: 10.5,
@@ -610,29 +635,35 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        '•  Siap diimpor & dihitung SHA-256',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      const SizedBox(width: 6),
+                      const Flexible(
+                        child: Text(
+                          '• Siap diimpor',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.swap_horiz_rounded, size: 15),
-              label: const Text(
-                'Ganti',
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-              ),
+            const SizedBox(width: 6),
+            IconButton(
+              tooltip: 'Ganti berkas',
+              iconSize: 20,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.swap_horiz_rounded),
               onPressed: _pickFile,
             ),
             IconButton(
+              tooltip: 'Hapus berkas',
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
               icon: const Icon(
                 Icons.delete_outline_rounded,
                 color: Colors.red,
-                size: 18,
               ),
               onPressed: () => setState(() => _pickedFile = null),
             ),
@@ -777,25 +808,31 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                     color: Color(0xFF0F52BA),
                   ),
                   const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Tanggal Dokumen',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Tanggal Dokumen',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      Text(
-                        dateFormat.format(_documentDate),
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.bold,
+                        Text(
+                          dateFormat.format(_documentDate),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -901,87 +938,95 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
   }
 
   Widget _buildFooter(Color borderColor, Color textMuted) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: borderColor)),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final showSecurityPill = constraints.maxWidth > 440;
-          return Row(
-            children: [
-              if (showSecurityPill)
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF059669).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.shield_outlined,
-                            size: 13,
+    return SafeArea(
+      top: false,
+      maintainBottomViewPadding: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: borderColor)),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final showSecurityPill = constraints.maxWidth > 460;
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (showSecurityPill)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF059669).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.shield_outlined,
+                          size: 13,
+                          color: Color(0xFF059669),
+                        ),
+                        SizedBox(width: 5),
+                        Text(
+                          'SHA-256 Otomatis',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
                             color: Color(0xFF059669),
                           ),
-                          SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              'SHA-256 Otomatis',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF059669),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else
-                const Spacer(),
-              TextButton(
-                onPressed: _isLoading
-                    ? null
-                    : () async {
-                        final shouldClose = await _confirmDiscard();
-                        if (shouldClose && context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                child: Text('Batal', style: TextStyle(color: textMuted)),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: _isLoading ? null : _submit,
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
                         ),
-                      )
-                    : const Icon(Icons.cloud_upload_rounded, size: 16),
-                label: Text(
-                  _isLoading ? 'Menyimpan...' : 'Simpan & Impor Dokumen',
+                      ],
+                    ),
+                  )
+                else
+                  const SizedBox.shrink(),
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () async {
+                                final shouldClose = await _confirmDiscard();
+                                if (shouldClose && context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                        child: Text('Batal', style: TextStyle(color: textMuted)),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: FilledButton.icon(
+                          onPressed: _isLoading ? null : _submit,
+                          icon: _isLoading
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.cloud_upload_rounded, size: 16),
+                          label: Text(
+                            _isLoading ? 'Menyimpan...' : 'Simpan & Impor Dokumen',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

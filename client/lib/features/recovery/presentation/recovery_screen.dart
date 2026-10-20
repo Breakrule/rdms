@@ -85,7 +85,12 @@ class _TrashTab extends ConsumerWidget {
           );
         }
         return ListView.separated(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: EdgeInsets.fromLTRB(
+            0,
+            12,
+            0,
+            12 + MediaQuery.paddingOf(context).bottom,
+          ),
           itemCount: docs.length,
           separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (context, index) {
@@ -236,7 +241,12 @@ class _BackupTabState extends ConsumerState<_BackupTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        20 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
         Text(
           'Backup portable',
@@ -412,7 +422,12 @@ class _HealthTabState extends ConsumerState<_HealthTab> {
         if (report != null)
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                20 + MediaQuery.paddingOf(context).bottom,
+              ),
               children: [
                 Text(
                   'Dokumen diperiksa: ${report.documentsScanned}. '
