@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dms-postgres
+    restart: unless-stopped
+    environment:
+      # Local development credentials. Loopback-bound ports below keep
+      # this reachable only from the host. Do NOT reuse these values in
+      # a real deployment; the API refuses the default passphrase when
+      # NODE_ENV=production (see server/src/config.ts).
+      POSTGRES_USER: dms_user
+      POSTGRES_PASSWORD: dms_secret_2026
+      POSTGRES_DB: dms_metadata
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Fresh-volume bootstrap. Existing volumes are migrated by the API
+      # via src/database/migrations on next boot (Phase 0.2/0.3).
+      - ./server/src/database/schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dms_user -d dms_metadata"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Phase 3.1 identity provider (development). Self-hosted so no
+  # third party ever sees record metadata. The realm `rdms` is imported
+  # from ./keycloak/realm-import on first boot. Loopback-bound like the
+  # other services; NOT a production deployment.
+  #
+  # Issuer note: KC_HOSTNAME makes Keycloak advertise
+  # http://localhost:8080/realms/rdms as the token `iss`, matching what a
+  # desktop/mobile client actually hits. Run the API on the host
+  # (`npm run dev`) during development so it can reach Keycloak at that
+  # same localhost URL for JWKS fetch + issuer validation; containerized
+  # `localhost` would not resolve to the browser/device view.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: dms-keycloak
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: "http://localhost:8080"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./keycloak/realm-import:/opt/keycloak/data/import:ro
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: dms-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # This Compose file is the local development stack. Production
+      # deployments inject NODE_ENV=production and real DB_PASSWORD via
+      # their own secret store; server/src/config.ts will refuse to boot
+      # with the shipped default passphrase in that mode.
+      NODE_ENV: development
+      PORT: 4000
+      HOST: 0.0.0.0
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: dms_user
+      DB_PASSWORD: dms_secret_2026
+      DB_NAME: dms_metadata
+      # Phase 3.1 OIDC (Keycloak). Values below match the imported realm.
+      # config.ts requires these to be injected in NODE_ENV=production.
+      OIDC_ISSUER: http://localhost:8080/realms/rdms
+      OIDC_AUDIENCE: rdms-api
+    ports:
+      - "127.0.0.1:4000:4000"
+
+volumes:
+  postgres_data:

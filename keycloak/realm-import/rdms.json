@@ -1,0 +1,99 @@
+{
+  "realm": "rdms",
+  "enabled": true,
+  "displayName": "RDMS Ultimate",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "sslRequired": "external",
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "roles": {
+    "realm": [
+      {
+        "name": "offline_access",
+        "description": "Allows offline access"
+      }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "rdms-api-aud",
+      "description": "Grants access tokens an aud claim for the RDMS metadata API (Phase 3.1: audience-scoped access tokens, never ID or Drive tokens).",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "rdms-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "rdms-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "rdms-api",
+      "name": "RDMS Metadata API (resource server)",
+      "description": "Bearer-only resource. Its client id is the access-token audience the backend verifies.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsAllowed": false
+    },
+    {
+      "clientId": "rdms-mobile",
+      "name": "RDMS Flutter Client",
+      "description": "Public native client. Authorization Code + PKCE (S256). Requests scope 'openid rdms-api-aud' to obtain an API-audience access token.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1:*",
+        "com.dms.document_management:/oauth2redirect"
+      ],
+      "webOrigins": [
+        "http://localhost:*",
+        "http://127.0.0.1:*"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "client.secret.creation.time": ""
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt",
+        "rdms-api-aud"
+      ]
+    }
+  ]
+}
