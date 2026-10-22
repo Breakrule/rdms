@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'interfaces/i_auth_service.dart';
 import 'token_storage_service.dart';
 
 /// Service managing Google Account Sign-In with scoped Google Drive file permissions
-class GoogleAuthService {
+class GoogleAuthService implements IAuthService {
   final TokenStorageService _tokenStorage;
   final GoogleSignIn _googleSignIn;
 
@@ -19,9 +20,11 @@ class GoogleAuthService {
               ],
             );
 
+  @override
   GoogleSignInAccount? get currentUser => _googleSignIn.currentUser;
 
   /// Initiates interactive Google OAuth 2.0 Sign-In flow
+  @override
   Future<GoogleSignInAccount?> signIn() async {
     try {
       final account = await _googleSignIn.signIn();
@@ -40,6 +43,7 @@ class GoogleAuthService {
   }
 
   /// Silently restores existing session if available
+  @override
   Future<GoogleSignInAccount?> signInSilently() async {
     try {
       final account = await _googleSignIn.signInSilently();
@@ -56,6 +60,7 @@ class GoogleAuthService {
   }
 
   /// Returns fresh access token, attempting silent refresh if available
+  @override
   Future<String?> getValidAccessToken() async {
     try {
       final account = _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
@@ -66,15 +71,20 @@ class GoogleAuthService {
           return auth.accessToken;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Silent access token refresh failed: $e');
+    }
     return await _tokenStorage.getAccessToken();
   }
 
   /// Signs out of Google account and cleans saved credentials
+  @override
   Future<void> signOut() async {
     try {
       await _googleSignIn.signOut();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Google Sign-Out exception: $e');
+    }
     await _tokenStorage.clearAll();
   }
 }

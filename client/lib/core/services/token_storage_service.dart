@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Secure storage service using platform Keystore / Keychain / DPAPI
@@ -26,13 +27,16 @@ class TokenStorageService {
       if (refreshToken != null) {
         await _storage.write(key: _keyRefreshToken, value: refreshToken);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('SecureStorage saveTokens error: $e');
+    }
   }
 
   Future<String?> getAccessToken() async {
     try {
       return await _storage.read(key: _keyAccessToken) ?? _memoryFallback[_keyAccessToken];
-    } catch (_) {
+    } catch (e) {
+      debugPrint('SecureStorage read accessToken error: $e');
       return _memoryFallback[_keyAccessToken];
     }
   }
@@ -40,7 +44,8 @@ class TokenStorageService {
   Future<String?> getRefreshToken() async {
     try {
       return await _storage.read(key: _keyRefreshToken) ?? _memoryFallback[_keyRefreshToken];
-    } catch (_) {
+    } catch (e) {
+      debugPrint('SecureStorage read refreshToken error: $e');
       return _memoryFallback[_keyRefreshToken];
     }
   }
@@ -49,14 +54,17 @@ class TokenStorageService {
     _memoryFallback[_keyDemoMode] = enabled ? 'true' : 'false';
     try {
       await _storage.write(key: _keyDemoMode, value: enabled ? 'true' : 'false');
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('SecureStorage setDemoMode error: $e');
+    }
   }
 
   Future<bool> isDemoMode() async {
     try {
       final val = await _storage.read(key: _keyDemoMode) ?? _memoryFallback[_keyDemoMode];
       return val == 'true';
-    } catch (_) {
+    } catch (e) {
+      debugPrint('SecureStorage isDemoMode error: $e');
       return _memoryFallback[_keyDemoMode] == 'true';
     }
   }
@@ -71,14 +79,17 @@ class TokenStorageService {
     _memoryFallback[_keyBackendUrl] = url;
     try {
       await _storage.write(key: _keyBackendUrl, value: url);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('SecureStorage setBackendBaseUrl error: $e');
+    }
   }
 
   Future<String> getBackendBaseUrl() async {
     try {
       final val = await _storage.read(key: _keyBackendUrl) ?? _memoryFallback[_keyBackendUrl];
       return val ?? 'http://127.0.0.1:4000';
-    } catch (_) {
+    } catch (e) {
+      debugPrint('SecureStorage getBackendBaseUrl error: $e');
       return _memoryFallback[_keyBackendUrl] ?? 'http://127.0.0.1:4000';
     }
   }
@@ -87,14 +98,17 @@ class TokenStorageService {
     _memoryFallback[_keyTargetFolder] = folderName;
     try {
       await _storage.write(key: _keyTargetFolder, value: folderName);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('SecureStorage setTargetFolderName error: $e');
+    }
   }
 
   Future<String> getTargetFolderName() async {
     try {
       final val = await _storage.read(key: _keyTargetFolder) ?? _memoryFallback[_keyTargetFolder];
       return (val != null && val.trim().isNotEmpty) ? val.trim() : 'RDMS Documents';
-    } catch (_) {
+    } catch (e) {
+      debugPrint('SecureStorage getTargetFolderName error: $e');
       final fallback = _memoryFallback[_keyTargetFolder];
       return (fallback != null && fallback.trim().isNotEmpty) ? fallback.trim() : 'RDMS Documents';
     }
@@ -104,13 +118,16 @@ class TokenStorageService {
     _memoryFallback[key] = value;
     try {
       await _storage.write(key: key, value: value);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('SecureStorage setCustomKey error: $e');
+    }
   }
 
   Future<String?> getCustomKey(String key) async {
     try {
       return await _storage.read(key: key) ?? _memoryFallback[key];
-    } catch (_) {
+    } catch (e) {
+      debugPrint('SecureStorage getCustomKey error: $e');
       return _memoryFallback[key];
     }
   }
@@ -119,6 +136,8 @@ class TokenStorageService {
     _memoryFallback.clear();
     try {
       await _storage.deleteAll();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('SecureStorage clearAll error: $e');
+    }
   }
 }

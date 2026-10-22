@@ -2,8 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'drive_upload_session_repository.dart';
+import 'interfaces/i_auth_service.dart';
 import 'token_storage_service.dart';
-import 'google_auth_service.dart';
 
 enum GDriveFileCheckStatus {
   synced,
@@ -78,7 +78,7 @@ class GDriveTransientException implements Exception {
 class GDriveService {
   final Dio _dio;
   final TokenStorageService _tokenStorage;
-  final GoogleAuthService? googleAuthService;
+  final IAuthService? googleAuthService;
   final DriveUploadSessionRepository? sessionRepository;
   final bool mockMode;
 

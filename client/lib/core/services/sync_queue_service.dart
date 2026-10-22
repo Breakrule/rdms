@@ -8,6 +8,7 @@ import '../database/app_database.dart';
 import 'backend_sync_client.dart';
 import 'document_replica_repository.dart';
 import 'gdrive_service.dart';
+import 'interfaces/i_sync_service.dart';
 import 'sync_job_repository.dart';
 
 /// Snapshot of queue + replica state that the Sync Center UI subscribes
@@ -54,7 +55,7 @@ class SyncProgressState {
 /// every job the worker claims. Jobs created under a different binding
 /// are skipped (Phase 2.3 acceptance: "account switching never transfers
 /// jobs to the wrong destination").
-class SyncQueueService {
+class SyncQueueService implements ISyncService {
   final DocumentRepository _repository;
   final GDriveService _gdriveService;
   final BackendSyncClient _backendClient;
@@ -63,6 +64,7 @@ class SyncQueueService {
   final AppDatabase _db;
 
   final _progressController = StreamController<SyncProgressState>.broadcast();
+  @override
   Stream<SyncProgressState> get progressStream => _progressController.stream;
 
   bool _isProcessing = false;
@@ -78,10 +80,12 @@ class SyncQueueService {
     required this._db,
   });
 
+  @override
   void dispose() {
     _progressController.close();
   }
 
+  @override
   void pause() {
     _isPaused = true;
     _emit();
@@ -91,6 +95,7 @@ class SyncQueueService {
   /// we intentionally do NOT auto-start a worker here because
   /// [processQueue] requires the caller-provided accountBinding, which
   /// is only known at the UI/provider layer.
+  @override
   void resume() {
     _isPaused = false;
     _emit();
@@ -101,6 +106,7 @@ class SyncQueueService {
   /// the first write cannot leave the two destinations out of sync.
   ///
   /// Replaces the previous "one status fits all" behavior.
+  @override
   Future<void> enqueueUpload({
     required DocumentItem doc,
     required String accountBinding,
@@ -144,6 +150,7 @@ class SyncQueueService {
 
   /// Queues a metadata-only job (backend) without touching Drive. Used
   /// by Phase 4's metadata edit once it lands; safe to call today.
+  @override
   Future<void> enqueueMetadataOnly({
     required DocumentItem doc,
     required String accountBinding,
@@ -168,6 +175,7 @@ class SyncQueueService {
 
   /// Claim and run jobs until none is eligible. Concurrency-capped at
   /// [_maxConcurrency]. Restarts pick up expired leases automatically.
+  @override
   Future<void> processQueue({required String accountBinding}) async {
     if (_isPaused) return;
     if (_isProcessing) return;
@@ -445,6 +453,7 @@ class SyncQueueService {
   /// [processQueue] so a caller can rely on the returned status. This
   /// is intentional — the previous non-awaiting design let a UI badge
   /// show "synced" before the job had actually run.
+  @override
   Future<bool> syncSingleDocument(DocumentItem doc, {required String accountBinding}) async {
     await enqueueUpload(doc: doc, accountBinding: accountBinding);
     await processQueue(accountBinding: accountBinding);
@@ -452,6 +461,7 @@ class SyncQueueService {
     return updated?.status == ReplicaStatus.current.name;
   }
 
+  @override
   Future<DocumentSyncStatus> checkSingleDocumentStatus(DocumentItem doc) async {
     if (doc.gdriveFileId == null || doc.gdriveFileId!.trim().isEmpty) {
       return doc.syncStatus;
@@ -511,6 +521,7 @@ class SyncQueueService {
     return newStatus;
   }
 
+  @override
   Future<SyncRollup> reconcileAllDocuments() async {
     final docs = await _repository.getActiveDocuments();
     final cloudDocs = docs
@@ -582,6 +593,7 @@ class SyncQueueService {
     );
   }
 
+  @override
   Future<bool> renameDriveFile({
     required DocumentItem doc,
     required String newFileName,
@@ -635,6 +647,7 @@ class SyncQueueService {
     return true;
   }
 
+  @override
   Future<bool> deleteDriveFile({
     required DocumentItem doc,
     bool moveToTrash = true,
@@ -670,6 +683,7 @@ class SyncQueueService {
   /// Bulk entry point used by the explorer screen's "Unggah Semua".
   /// Queues every pending local-only / errored document for the given
   /// account binding; then kicks the worker.
+  @override
   Future<int> enqueueAllUnsynced({required String accountBinding}) async {
     final docs = await _repository.getActiveDocuments();
     final eligible = docs

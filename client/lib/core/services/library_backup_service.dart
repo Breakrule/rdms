@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../database/app_database.dart';
 import '../utils/hash_util.dart';
+import 'interfaces/i_backup_service.dart';
 import 'operation_journal.dart';
 
 /// Portable backup export/restore for the local library (Phase 1.5 / 1.6).
@@ -29,7 +30,7 @@ import 'operation_journal.dart';
 ///   activating a metadata row. Any mismatch aborts the restore and
 ///   leaves the live library untouched.
 /// - [ConflictPolicy] is mandatory: silent overwrite is not permitted.
-class LibraryBackupService {
+class LibraryBackupService implements IBackupService {
   /// Manifest v2 (Phase 4.8) adds notes/originalFileName/tags per
   /// document. v1 archives remain restorable; missing fields fall back
   /// to nulls. Favorites stay OUT of the manifest by design (they are
@@ -53,6 +54,7 @@ class LibraryBackupService {
   /// Existing files under [destinationDir] are treated as scratch space;
   /// the manifest and `files/` folder are re-created each run. Callers
   /// should point the service at a fresh directory to avoid surprises.
+  @override
   Future<BackupSummary> exportLibrary(Directory destinationDir) async {
     if (!await destinationDir.exists()) {
       await destinationDir.create(recursive: true);
@@ -173,6 +175,7 @@ class LibraryBackupService {
   /// Reads the manifest and validates every claim it makes. Returns a
   /// [BackupValidation] that lists conflicts against the live database
   /// so the caller can decide the policy before [restoreBackup] runs.
+  @override
   Future<BackupValidation> validateBackup(Directory backupDir) async {
     final manifestFile = File(p.join(backupDir.path, 'manifest.json'));
     if (!await manifestFile.exists()) {
@@ -259,6 +262,7 @@ class LibraryBackupService {
   /// checksum, and only then is the DB row upserted. Conflicts follow
   /// [policy]; abort on any checksum mismatch (the operation journal
   /// marks the run as failed and the caller sees the exception).
+  @override
   Future<RestoreSummary> restoreBackup(
     Directory backupDir, {
     required Directory rootDir,

@@ -185,8 +185,9 @@ class _DocumentExplorerScreenState
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final layoutMode = HomeLayout.fromWidth(size.width);
     final hasSelection = ref.watch(selectedDocumentProvider) != null;
-    final docsAsync = ref.watch(documentsListStreamProvider);
-    final visibleCount = docsAsync.asData?.value.length ?? 0;
+    final visibleCount = ref.watch(
+      documentsListStreamProvider.select((s) => s.asData?.value.length ?? 0),
+    );
 
     final showInlineDetails = HomeLayout.shouldShowInlineDetails(
       availableWidth: size.width,
@@ -252,34 +253,44 @@ class _DocumentExplorerScreenState
               child: Column(
                 children: [
                   // Workspace Header
-                  HomeHeader(
-                    onOpenAddDocument: _openAddDocument,
-                    onTriggerBulkUpload: _triggerBulkSync,
-                    onOpenCloudSettings: _openCloudSettings,
-                    onOpenDrawer: layoutMode.usesDrawer
-                        ? () => _scaffoldKey.currentState?.openDrawer()
-                        : null,
+                  RepaintBoundary(
+                    child: HomeHeader(
+                      onOpenAddDocument: _openAddDocument,
+                      onTriggerBulkUpload: _triggerBulkSync,
+                      onOpenCloudSettings: _openCloudSettings,
+                      onOpenDrawer: layoutMode.usesDrawer
+                          ? () => _scaffoldKey.currentState?.openDrawer()
+                          : null,
+                    ),
                   ),
 
                   // Compact Summary Cards
-                  const HomeSummary(),
+                  const RepaintBoundary(
+                    child: HomeSummary(),
+                  ),
 
                   // Operation / Progress Status Strip
-                  const HomeStatusBar(),
+                  const RepaintBoundary(
+                    child: HomeStatusBar(),
+                  ),
 
                   // Search and Filter Toolbar
-                  DocumentToolbar(
-                    searchFocusNode: _searchFocusNode,
-                    onOpenCommandPalette: _openCommandPalette,
-                    visibleCount: visibleCount,
+                  RepaintBoundary(
+                    child: DocumentToolbar(
+                      searchFocusNode: _searchFocusNode,
+                      onOpenCommandPalette: _openCommandPalette,
+                      visibleCount: visibleCount,
+                    ),
                   ),
 
                   // Document Collection List
                   Expanded(
-                    child: DocumentListView(
-                      onOpenAddDocument: _openAddDocument,
-                      onOpenCommandPalette: _openCommandPalette,
-                      onSelectDocument: _activateDocument,
+                    child: RepaintBoundary(
+                      child: DocumentListView(
+                        onOpenAddDocument: _openAddDocument,
+                        onOpenCommandPalette: _openCommandPalette,
+                        onSelectDocument: _activateDocument,
+                      ),
                     ),
                   ),
                 ],

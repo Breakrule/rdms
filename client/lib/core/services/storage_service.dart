@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../utils/file_sanitizer.dart';
 import '../utils/hash_util.dart';
 import '../utils/mime_detector.dart';
+import 'interfaces/i_storage_service.dart';
 
 class ManagedFileInfo {
   final String localFilePath;
@@ -26,7 +27,7 @@ class ManagedFileInfo {
 
 /// Service managing custom local file directory, path persistence,
 /// and safe local file storage operations.
-class LocalStorageService {
+class LocalStorageService implements IStorageService {
   String? _customBasePath;
 
   /// Async resolver supplied by the caller (usually
@@ -48,6 +49,7 @@ class LocalStorageService {
   /// the two responsibilities apart is what makes Phase 1.2 safe
   /// relocation possible (a move can flip the DB row atomically with
   /// the copy-verify step).
+  @override
   Future<void> setCustomBasePath(String path) async {
     final dir = Directory(path);
     if (!await dir.exists()) {
@@ -59,6 +61,7 @@ class LocalStorageService {
   /// Returns current active storage directory path.
   /// Falls back to application documents directory if neither the
   /// session override nor a persistent root is configured.
+  @override
   Future<String> getStorageDirectoryPath() async {
     if (_customBasePath != null && _customBasePath!.isNotEmpty) {
       return _customBasePath!;
@@ -76,6 +79,7 @@ class LocalStorageService {
   }
 
   /// Verifies if the storage media is mounted and accessible.
+  @override
   Future<bool> isStorageAccessible() async {
     try {
       final path = await getStorageDirectoryPath();
@@ -87,6 +91,7 @@ class LocalStorageService {
 
   /// Stores a file into the managed storage directory according to
   /// [ISO_DATE]_[SANITIZED_TITLE]_[UUID_SHORT].[EXTENSION]
+  @override
   Future<ManagedFileInfo> storeFile({
     required File sourceFile,
     required String title,
@@ -126,6 +131,7 @@ class LocalStorageService {
   }
 
   /// Stores raw bytes into the managed storage directory.
+  @override
   Future<ManagedFileInfo> storeBytes({
     required Uint8List bytes,
     required String title,
@@ -175,6 +181,7 @@ class LocalStorageService {
   }
 
   /// Deletes a file from the managed storage if it exists.
+  @override
   Future<bool> deleteManagedFile(String path) async {
     try {
       final file = File(path);

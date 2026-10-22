@@ -51,6 +51,9 @@ dependencies:
   # (desktop/web are unsupported → the in-app reader is hidden there and
   # falls back to external open). See implementation_plan_feat.md 5.1.
   flutter_pdfview: ^1.4.5
+  camera: ^0.12.1
+  google_mlkit_text_recognition: ^0.17.1
+  image_cropper: ^13.0.0
 
 dev_dependencies:
   flutter_test:
@@ -70,6 +73,7 @@ dev_dependencies:
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
+  cross_file: any
 flutter:
 
   # The following line ensures that the Material Icons font is

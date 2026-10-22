@@ -1,17 +1,21 @@
 import 'dart:io';
 import 'dart:math' as math;
-
+import 'package:camera/camera.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/hash_util.dart';
 import '../../../../core/widgets/custom_toast.dart';
+import '../../../camera_ocr/presentation/camera_capture_screen.dart';
+import '../../../camera_ocr/presentation/ocr_review_screen.dart';
 import '../providers/document_providers.dart';
-
-enum DuplicateChoice { cancel, keepSeparate }
+import 'category_selector.dart';
+import 'document_metadata_form.dart';
+import 'duplicate_check_dialog.dart';
+import 'file_dropzone.dart';
 
 class AddDocumentModal extends ConsumerStatefulWidget {
   final PlatformFile? initialPickedFile;
@@ -33,7 +37,6 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
   String _category = 'SK';
   PlatformFile? _pickedFile;
   bool _isLoading = false;
-  bool _isHoveringDropzone = false;
 
   @override
   void initState() {
@@ -48,39 +51,6 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
     final current = DateTime.now().year;
     return List.generate(7, (i) => current + 1 - i);
   }
-
-  static const Map<String, (IconData, Color, String)> _categories = {
-    'SK': (
-      Icons.verified_user_rounded,
-      Color(0xFF2563EB),
-      'Surat Keputusan Resmi',
-    ),
-    'Laporan': (
-      Icons.analytics_rounded,
-      Color(0xFF059669),
-      'Laporan Berkala / Kinerja',
-    ),
-    'Notula': (
-      Icons.history_edu_rounded,
-      Color(0xFFD97706),
-      'Notulen Rapat & Pembahasan',
-    ),
-    'Teknis': (
-      Icons.terminal_rounded,
-      Color(0xFF0891B2),
-      'Spesifikasi & Dokumen Teknis',
-    ),
-    'Surat Keputusan': (
-      Icons.military_tech_rounded,
-      Color(0xFF7C3AED),
-      'Ketetapan Tingkat Pimpinan',
-    ),
-    'Peraturan': (
-      Icons.gavel_rounded,
-      Color(0xFFDC2626),
-      'Aturan & Regulasi Institusi',
-    ),
-  };
 
   @override
   void dispose() {
@@ -123,28 +93,6 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
     return result ?? false;
   }
 
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-  }
-
-  static (IconData, Color, String) _fileMeta(String name) {
-    final ext = name.split('.').last.toLowerCase();
-    return switch (ext) {
-      'pdf' => (Icons.picture_as_pdf_rounded, const Color(0xFFDC2626), 'PDF'),
-      'doc' ||
-      'docx' => (Icons.description_rounded, const Color(0xFF2563EB), 'DOCX'),
-      'xls' ||
-      'xlsx' ||
-      'csv' => (Icons.table_chart_rounded, const Color(0xFF059669), 'XLSX'),
-      'png' ||
-      'jpg' ||
-      'jpeg' => (Icons.image_rounded, const Color(0xFF9333EA), 'IMAGE'),
-      _ => (Icons.insert_drive_file_rounded, const Color(0xFF0F52BA), 'FILE'),
-    };
-  }
-
   Future<void> _pickFile() async {
     final result = await FilePicker.pickFiles();
     if (result.isNotEmpty) {
@@ -158,6 +106,57 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
               : name;
         }
       });
+    }
+  }
+
+  bool get _canScanCamera => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  Future<void> _scanDocumentFromCamera() async {
+    final result = await Navigator.of(context).push<OcrCaptureResult>(
+      MaterialPageRoute(
+        builder: (ctx) => const CameraCaptureScreen(),
+      ),
+    );
+
+    if (result != null && mounted) {
+      final file = result.file;
+      final fileName = file.path.split(Platform.pathSeparator).last;
+
+      setState(() {
+        _pickedFile = _CapturedPlatformFile(file);
+
+        if (result.extractedText.isNotEmpty) {
+          _extractedTextController.text = result.extractedText;
+        }
+
+        if (_titleController.text.trim().isEmpty) {
+          final lines = result.extractedText
+              .split('\n')
+              .map((l) => l.trim())
+              .where((l) => l.isNotEmpty && l.length > 3)
+              .toList();
+          if (lines.isNotEmpty) {
+            final candidate = lines.first;
+            _titleController.text = candidate.length > 50
+                ? candidate.substring(0, 50).trim()
+                : candidate;
+          } else {
+            final rawName = fileName.contains('.')
+                ? fileName.substring(0, fileName.lastIndexOf('.'))
+                : fileName;
+            _titleController.text = 'Pindaian $rawName';
+          }
+        }
+      });
+
+      CustomToast.show(
+        context,
+        title: 'Dokumen Berhasil Dipindai',
+        message: result.extractedText.isNotEmpty
+            ? 'Teks dokumen berhasil diekstraksi (${result.extractedText.length} karakter).'
+            : 'Foto dokumen tersimpan tanpa teks terdeteksi.',
+        type: ToastType.success,
+      );
     }
   }
 
@@ -186,30 +185,12 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
       if (matches.isNotEmpty) {
         if (mounted) setState(() => _isLoading = false);
         if (!mounted) return;
-        final decision = await showDialog<DuplicateChoice>(
+        final decision = await showDuplicateCheckDialog(
           context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Konten Identik Ditemukan'),
-            content: Text(
-              'Berkas ini identik dengan ${matches.length} dokumen tersimpan, '
-              'mis. "${matches.first.title}". '
-              'Buat catatan terpisah atau batalkan impornya?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, DuplicateChoice.cancel),
-                child: const Text('Batal'),
-              ),
-              FilledButton.tonal(
-                onPressed: () => Navigator.pop(ctx, DuplicateChoice.keepSeparate),
-                child: const Text('Buat Catatan Terpisah'),
-              ),
-            ],
-          ),
+          matchCount: matches.length,
+          sampleTitle: matches.first.title,
         );
         if (decision != DuplicateChoice.keepSeparate) {
-          // Abandon this import; the form stays open so the user can
-          // adjust metadata and retry deliberately.
           return;
         }
         if (mounted) setState(() => _isLoading = true);
@@ -258,7 +239,6 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final surfaceBg = isDark ? const Color(0xFF0F172A) : Colors.white;
-    final cardBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC);
     final borderColor = isDark
         ? const Color(0xFF334155)
         : const Color(0xFFE2E8F0);
@@ -310,10 +290,7 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Header
                     _buildHeader(borderColor, textMuted),
-
-                    // Form Body
                     Flexible(
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -322,78 +299,46 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _buildHeroDropzone(
-                                isDark,
-                                cardBg,
-                                borderColor,
-                                textMuted,
-                              ),
-                              const SizedBox(height: 18),
-                              _buildSectionHeader(
-                                'INFORMASI UTAMA DOKUMEN',
-                                'Identitas resmi dokumen untuk pencatatan sistem',
-                                Icons.badge_outlined,
-                              ),
-                              const SizedBox(height: 10),
-                              TextFormField(
-                                controller: _titleController,
-                                style: const TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                decoration: _inputDecoration(
-                                  'Judul Dokumen *',
-                                  'Misal: Surat Keputusan Pengangkatan Direksi 2026',
-                                  Icons.edit_note_rounded,
-                                  isDark,
-                                  borderColor,
-                                ),
-                                validator: (v) => v == null || v.trim().isEmpty
-                                    ? 'Judul dokumen wajib diisi'
+                              FileDropzone(
+                                pickedFile: _pickedFile,
+                                onPickFile: _pickFile,
+                                onRemoveFile: () =>
+                                    setState(() => _pickedFile = null),
+                                onScanDocument: _canScanCamera
+                                    ? _scanDocumentFromCamera
                                     : null,
                               ),
-                              const SizedBox(height: 10),
-                              TextFormField(
-                                controller: _docNumberController,
-                                style: const TextStyle(fontSize: 13.5),
-                                decoration: _inputDecoration(
-                                  'Nomor Dokumen (Opsional)',
-                                  'Misal: 188.45/SK/2026 atau No. Dok/01/2026',
-                                  Icons.tag_rounded,
-                                  isDark,
-                                  borderColor,
-                                ),
-                              ),
                               const SizedBox(height: 18),
-                              _buildSectionHeader(
+                              DocumentMetadataForm.buildSectionHeader(
                                 'KLASIFIKASI KATEGORI',
                                 'Pilih jenis arsip untuk filter dan navigasi cepat',
                                 Icons.category_outlined,
                               ),
                               const SizedBox(height: 8),
-                              _buildCategoryChips(isDark, borderColor),
-                              const SizedBox(height: 18),
-                              _buildSectionHeader(
-                                'PERIODE & TANGGAL DOKUMEN',
-                                'Waktu penerbitan dan tahun anggaran pembukuan',
-                                Icons.event_note_rounded,
+                              CategorySelector(
+                                selectedCategory: _category,
+                                onSelected: (cat) =>
+                                    setState(() => _category = cat),
                               ),
-                              const SizedBox(height: 8),
-                              _buildPeriodSection(isDark, cardBg, borderColor),
                               const SizedBox(height: 18),
-                              _buildFts5Section(
-                                isDark,
-                                cardBg,
-                                borderColor,
-                                textMuted,
+                              DocumentMetadataForm(
+                                titleController: _titleController,
+                                docNumberController: _docNumberController,
+                                extractedTextController:
+                                    _extractedTextController,
+                                documentDate: _documentDate,
+                                fiscalYear: _fiscalYear,
+                                fiscalYears: _fiscalYears,
+                                onDateChanged: (d) =>
+                                    setState(() => _documentDate = d),
+                                onFiscalYearChanged: (y) =>
+                                    setState(() => _fiscalYear = y),
                               ),
                             ],
                           ),
                         ),
                       ),
                     ),
-
-                    // Footer
                     _buildFooter(borderColor, textMuted),
                   ],
                 ),
@@ -452,7 +397,8 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                         color: const Color(0xFF059669).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(5),
                         border: Border.all(
-                          color: const Color(0xFF059669).withValues(alpha: 0.3),
+                          color:
+                              const Color(0xFF059669).withValues(alpha: 0.3),
                         ),
                       ),
                       child: const Row(
@@ -495,442 +441,6 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                 Navigator.of(context).pop();
               }
             },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, String subtitle, IconData icon) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 14, color: const Color(0xFF0F52BA)),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                  color: Color(0xFF0F52BA),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 2),
-        Text(
-          subtitle,
-          style: const TextStyle(fontSize: 11, color: Colors.grey),
-        ),
-      ],
-    );
-  }
-
-  InputDecoration _inputDecoration(
-    String label,
-    String hint,
-    IconData icon,
-    bool isDark,
-    Color borderColor,
-  ) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      prefixIcon: Icon(icon, size: 18),
-      filled: true,
-      fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
-        borderSide: BorderSide(color: borderColor),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
-        borderSide: BorderSide(color: borderColor),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
-        borderSide: const BorderSide(color: Color(0xFF0F52BA), width: 1.8),
-      ),
-    );
-  }
-
-  Widget _buildHeroDropzone(
-    bool isDark,
-    Color cardBg,
-    Color borderColor,
-    Color textMuted,
-  ) {
-    if (_pickedFile != null) {
-      final meta = _fileMeta(_pickedFile!.name);
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF059669)
-              .withValues(alpha: isDark ? 0.12 : 0.05),
-          borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
-          border: Border.all(
-            color: const Color(0xFF059669).withValues(alpha: 0.4),
-            width: 1.4,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: meta.$2.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(meta.$1, color: meta.$2, size: 22),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _pickedFile!.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 1.5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF059669)
-                              .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text(
-                          _formatBytes(
-                            _pickedFile!.lengthSync() ??
-                                (_pickedFile!.path != null &&
-                                        File(_pickedFile!.path!).existsSync()
-                                    ? File(_pickedFile!.path!).lengthSync()
-                                    : 0),
-                          ),
-                          style: const TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF059669),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Flexible(
-                        child: Text(
-                          '• Siap diimpor',
-                          style: TextStyle(fontSize: 11, color: Colors.grey),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            IconButton(
-              tooltip: 'Ganti berkas',
-              iconSize: 20,
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.swap_horiz_rounded),
-              onPressed: _pickFile,
-            ),
-            IconButton(
-              tooltip: 'Hapus berkas',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(
-                Icons.delete_outline_rounded,
-                color: Colors.red,
-              ),
-              onPressed: () => setState(() => _pickedFile = null),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHoveringDropzone = true),
-      onExit: (_) => setState(() => _isHoveringDropzone = false),
-      child: InkWell(
-        onTap: _pickFile,
-        borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
-          decoration: BoxDecoration(
-            color: _isHoveringDropzone
-                ? const Color(0xFF0F52BA)
-                      .withValues(alpha: isDark ? 0.15 : 0.05)
-                : cardBg,
-            borderRadius: BorderRadius.circular(AppTheme.radiusPanel),
-            border: Border.all(
-              color: _isHoveringDropzone
-                  ? const Color(0xFF0F52BA)
-                  : borderColor,
-              width: _isHoveringDropzone ? 1.8 : 1.2,
-            ),
-          ),
-          child: Column(
-            children: [
-              const Icon(
-                Icons.file_upload_outlined,
-                color: Color(0xFF0F52BA),
-                size: 36,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Pilih Berkas Dokumen (Klik untuk Memilih)',
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                'Mendukung format PDF, Word (.docx), Excel (.xlsx), Gambar, dan Teks (.txt)',
-                style: TextStyle(fontSize: 11.5, color: textMuted),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                children: ['PDF', 'DOCX', 'XLSX', 'PNG/JPG', 'TXT']
-                    .map(
-                      (f) => Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.blueGrey.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text(
-                          f,
-                          style: const TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryChips(bool isDark, Color borderColor) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: _categories.entries.map((entry) {
-        final cat = entry.key;
-        final meta = entry.value;
-        final isSelected = _category == cat;
-
-        return ChoiceChip(
-          label: Text(cat),
-          avatar: Icon(
-            meta.$1,
-            size: 16,
-            color: isSelected ? Colors.white : meta.$2,
-          ),
-          selected: isSelected,
-          selectedColor: meta.$2,
-          labelStyle: TextStyle(
-            color: isSelected ? Colors.white : null,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            fontSize: 12,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusChip),
-            side: BorderSide(color: isSelected ? meta.$2 : borderColor),
-          ),
-          onSelected: (selected) {
-            if (selected) setState(() => _category = cat);
-          },
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildPeriodSection(bool isDark, Color cardBg, Color borderColor) {
-    final dateFormat = DateFormat('dd MMMM yyyy');
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _documentDate,
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime(2050),
-                );
-                if (picked != null) setState(() => _documentDate = picked);
-              },
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.calendar_today_rounded,
-                    size: 18,
-                    color: Color(0xFF0F52BA),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Tanggal Dokumen',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          dateFormat.format(_documentDate),
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(height: 32, width: 1, color: borderColor),
-          const SizedBox(width: 12),
-          DropdownButton<int>(
-            value: _fiscalYear,
-            underline: const SizedBox.shrink(),
-            isDense: true,
-            items: _fiscalYears.map((y) {
-              return DropdownMenuItem(
-                value: y,
-                child: Text(
-                  'Tahun $y',
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              );
-            }).toList(),
-            onChanged: (val) {
-              if (val != null) setState(() => _fiscalYear = val);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFts5Section(
-    bool isDark,
-    Color cardBg,
-    Color borderColor,
-    Color textMuted,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.manage_search_rounded,
-                size: 16,
-                color: Color(0xFF0F52BA),
-              ),
-              const SizedBox(width: 6),
-              const Expanded(
-                child: Text(
-                  'Kutipan & Teks Terindeks (FTS5 SQLite)',
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 5,
-                  vertical: 1.5,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F52BA).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'FAST SEARCH',
-                  style: TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F52BA),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _extractedTextController,
-            maxLines: 3,
-            style: const TextStyle(fontSize: 12),
-            decoration: InputDecoration(
-              hintText:
-                  'Ketik ringkasan, isi penting, atau kata kunci dokumen...',
-              filled: true,
-              fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-              contentPadding: const EdgeInsets.all(10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: borderColor),
-              ),
-            ),
           ),
         ],
       ),
@@ -997,7 +507,8 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                                   Navigator.of(context).pop();
                                 }
                               },
-                        child: Text('Batal', style: TextStyle(color: textMuted)),
+                        child:
+                            Text('Batal', style: TextStyle(color: textMuted)),
                       ),
                       const SizedBox(width: 8),
                       Flexible(
@@ -1014,7 +525,9 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
                                 )
                               : const Icon(Icons.cloud_upload_rounded, size: 16),
                           label: Text(
-                            _isLoading ? 'Menyimpan...' : 'Simpan & Impor Dokumen',
+                            _isLoading
+                                ? 'Menyimpan...'
+                                : 'Simpan & Impor Dokumen',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1030,4 +543,37 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
       ),
     );
   }
+}
+
+base class _CapturedPlatformFile extends PlatformFile {
+  @override
+  final String name;
+  @override
+  final Uri uri;
+  final File _file;
+
+  _CapturedPlatformFile(File file)
+      : _file = file,
+        name = file.path.split(Platform.pathSeparator).last,
+        uri = file.uri;
+
+  @override
+  String? get path => _file.path;
+
+  @override
+  XFile get xFile => XFile(_file.path);
+
+  @override
+  int? lengthSync() => _file.existsSync() ? _file.lengthSync() : null;
+
+  @override
+  Future<int?> length() async =>
+      _file.existsSync() ? await _file.length() : null;
+
+  @override
+  Future<Uint8List> readAsBytes() => _file.readAsBytes();
+
+  @override
+  Stream<Uint8List> readAsByteStream() =>
+      _file.openRead().map((chunk) => Uint8List.fromList(chunk));
 }

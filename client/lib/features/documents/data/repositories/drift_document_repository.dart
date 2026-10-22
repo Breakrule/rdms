@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:document_management/core/database/app_database.dart';
+import 'package:document_management/core/services/interfaces/i_storage_service.dart';
 import 'package:document_management/core/services/operation_journal.dart';
 import 'package:document_management/core/services/storage_service.dart';
 import '../../domain/models/document_item.dart';
@@ -10,7 +11,7 @@ import '../../domain/repositories/document_repository.dart';
 
 class DriftDocumentRepository implements DocumentRepository {
   final AppDatabase _db;
-  final LocalStorageService _storageService;
+  final IStorageService _storageService;
   final OperationJournal? _journal;
   static const _uuid = Uuid();
 

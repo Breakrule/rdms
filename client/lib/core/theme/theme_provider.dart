@@ -27,7 +27,9 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
       } else if (saved == 'system') {
         state = ThemeMode.system;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to load persisted theme mode: $e');
+    }
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
@@ -35,7 +37,9 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
     try {
       final tokenStorage = ref.read(tokenStorageServiceProvider);
       await tokenStorage.setCustomKey(_storageKey, mode.name);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to persist theme mode: $e');
+    }
   }
 
   void toggleTheme() {

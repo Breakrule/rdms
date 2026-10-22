@@ -151,15 +151,21 @@ class HomeSummary extends ConsumerWidget {
                                         .withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Text(
-                                '${pill.count}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: pill.isActive
-                                      ? pill.activeColor
-                                      : theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.7),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 250),
+                                transitionBuilder: (child, anim) =>
+                                    ScaleTransition(scale: anim, child: child),
+                                child: Text(
+                                  '${pill.count}',
+                                  key: ValueKey<int>(pill.count),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: pill.isActive
+                                        ? pill.activeColor
+                                        : theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.7),
+                                  ),
                                 ),
                               ),
                             ),
