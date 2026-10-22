@@ -22,8 +22,10 @@ export class DbWorkspaceProvisioner implements WorkspaceProvisioner {
 
   async ensurePersonalWorkspace(principal: Principal): Promise<string> {
     const client = await this.pool.connect();
+    let transactionStarted = false;
     try {
       await client.query('BEGIN');
+      transactionStarted = true;
 
       const userRes = await client.query<{ id: string }>(
         `INSERT INTO users (subject, email)
@@ -45,6 +47,7 @@ export class DbWorkspaceProvisioner implements WorkspaceProvisioner {
       );
       if (existing.rowCount && existing.rows.length > 0) {
         await client.query('COMMIT');
+        transactionStarted = false;
         return existing.rows[0].id;
       }
 
@@ -59,9 +62,18 @@ export class DbWorkspaceProvisioner implements WorkspaceProvisioner {
       );
 
       await client.query('COMMIT');
+      transactionStarted = false;
       return workspaceId;
     } catch (err) {
-      await client.query('ROLLBACK');
+      // Bugfix #3: Only attempt ROLLBACK if the transaction was successfully started.
+      // If 'BEGIN' itself threw, calling ROLLBACK is an error.
+      if (transactionStarted) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackErr) {
+          console.error('[workspace-provisioner] ROLLBACK failed after initial error:', rollbackErr);
+        }
+      }
       throw err;
     } finally {
       client.release();

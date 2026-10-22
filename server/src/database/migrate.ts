@@ -150,3 +150,4 @@ export async function runMigrations(pool: Pool): Promise<MigrationResult> {
 }
 
 export { MigrationError };
+

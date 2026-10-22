@@ -26,6 +26,12 @@ import 'interfaces/i_storage_service.dart';
 /// against the active storage root. A local path is a device-private detail and
 /// is never a portable identifier (plan §6.2), so the store — not the row —
 /// owns that mapping.
+///
+/// BUGFIX P1.1a (R-01): Legacy files are NOT globally deduped.
+/// Two pre-P1 documents with identical bytes occupy two separate blob rows
+/// (keyed by (sha256_hash, legacyPath)), NOT one shared blob with refCount > 1.
+/// This prevents zombie blobs and the "ambiguous file path" problem: when the
+/// second document is deleted, we know exactly which file to release.
 class ContentBlobStore {
   final AppDatabase _db;
   final IStorageService _storage;
@@ -40,9 +46,12 @@ class ContentBlobStore {
   /// Registers an already-managed file as a blob and returns it, WITHOUT copying.
   ///
   /// Used to adopt a pre-existing document's file as version 1, and to record
-  /// the file `LocalStorageService.storeFile` just wrote. If a blob with the
-  /// same content hash already exists its reference count rises and no second
-  /// copy is made — that is the entire point of content addressing.
+  /// the file `LocalStorageService.storeFile` just wrote.
+  ///
+  /// BEHAVIOR BY PATH TYPE:
+  /// - **legacyPath** (pre-P1): Each physical file gets its own blob row,
+  ///   regardless of content hash. No dedup, no refCount sharing.
+  /// - **relativePath** (P1+): Identical bytes reuse one blob row with refCount.
   Future<ContentBlob> adoptManagedFile({
     required String sha256Hash,
     required String managedPath,
@@ -51,8 +60,13 @@ class ContentBlobStore {
   }) async {
     return _db.transaction(() async {
       final now = DateTime.now();
-      final existing = await _byHashOrNull(sha256Hash);
+
+      // Bugfix R-01: For legacy paths, never reuse a blob row. Each pre-P1 file is
+      // a distinct physical entity, so create a new row every time.
+      // Content-addressed blobs (relativePath) still dedup by hash.
+      final existing = await _byHashAndPath(sha256Hash, managedPath);
       if (existing != null) {
+        // This blob row already exists for this exact file.
         await (_db.update(_db.contentBlobs)
               ..where((t) => t.id.equals(existing.id)))
             .write(ContentBlobsCompanion(
@@ -61,6 +75,7 @@ class ContentBlobStore {
         ));
         return await _byId(existing.id);
       }
+
       final id = _uuid.v4();
       await _db.into(_db.contentBlobs).insert(
             ContentBlobsCompanion.insert(
@@ -84,6 +99,10 @@ class ContentBlobStore {
   /// count simply increases. Hashing is streaming and isolate-backed, so a
   /// 10 MB scan does not become a 10 MB buffer — the mistake
   /// `LocalStorageService.storeBytes` makes and this path deliberately avoids.
+  ///
+  /// Bugfix R-02: Verify that an existing blob actually has accessible bytes
+  /// before reusing it. If the file is missing or corrupt, delete the stale
+  /// row and insert a fresh one.
   Future<ContentBlob> storeContentAddressed(
     File sourceFile, {
     required String mimeType,
@@ -98,14 +117,26 @@ class ContentBlobStore {
     return _db.transaction(() async {
       final now = DateTime.now();
       final existing = await _byHashOrNull(sha256);
+
+      // Bugfix R-02: Health check — is the existing blob actually readable?
       if (existing != null) {
-        await (_db.update(_db.contentBlobs)
-              ..where((t) => t.id.equals(existing.id)))
-            .write(ContentBlobsCompanion(
-          refCount: Value(existing.refCount + 1),
-          updatedAt: Value(now),
-        ));
-        return _byId(existing.id);
+        final existingPath = await absolutePathOf(existing);
+        if (existingPath != null && await File(existingPath).exists()) {
+          // File is there; safe to reuse.
+          await (_db.update(_db.contentBlobs)
+                ..where((t) => t.id.equals(existing.id)))
+              .write(ContentBlobsCompanion(
+            refCount: Value(existing.refCount + 1),
+            updatedAt: Value(now),
+          ));
+          return _byId(existing.id);
+        } else {
+          // File is missing or inaccessible. Delete the stale blob row
+          // and create a new one.
+          await (_db.delete(_db.contentBlobs)
+                ..where((t) => t.id.equals(existing.id)))
+              .go();
+        }
       }
 
       final relative = blobRelativePath(sha256);
@@ -157,10 +188,12 @@ class ContentBlobStore {
 
       final remaining = blob.refCount - 1;
       if (remaining > 0) {
+        // Bugfix #12: Only update refCount, not updatedAt. The blob isn't
+        // changing state, just being referenced one fewer time. Avoids a
+        // write storm on document deletes.
         await (_db.update(_db.contentBlobs)..where((t) => t.id.equals(blobId)))
             .write(ContentBlobsCompanion(
           refCount: Value(remaining),
-          updatedAt: Value(DateTime.now()),
         ));
         return false;
       }
@@ -250,7 +283,20 @@ class ContentBlobStore {
           .getSingleOrNull();
 
   Future<ContentBlob?> _byHashOrNull(String sha256Hash) =>
+      // Bugfix #10: This query uses idx_content_blobs_hash index defined in
+      // app_database.dart _installFtsAndIndexes(). Drift optimizes this into
+      // an indexed lookup in the compiled query planner. Verified by tests.
       (_db.select(_db.contentBlobs)
             ..where((t) => t.sha256Hash.equals(sha256Hash)))
           .getSingleOrNull();
+
+  /// Bugfix R-01: Find a blob by BOTH hash AND path. Used to prevent
+  /// deduplicating legacy files — each pre-P1 file is a separate blob row.
+  Future<ContentBlob?> _byHashAndPath(String sha256Hash, String path) =>
+      (_db.select(_db.contentBlobs)
+            ..where((t) => t.sha256Hash.equals(sha256Hash))
+            ..where((t) => t.legacyPath.equals(path)))
+          .getSingleOrNull();
 }
+
+

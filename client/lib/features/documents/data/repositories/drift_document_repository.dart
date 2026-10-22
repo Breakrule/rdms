@@ -280,10 +280,13 @@ class DriftDocumentRepository implements DocumentRepository {
     );
   }
 
-  @override
+    @override
   Future<void> deleteDocument(String id) async {
-    final doc = await (_db.select(_db.localDocuments)..where((t) => t.id.equals(id))).getSingleOrNull();
+    final doc = await (_db.select(_db.localDocuments)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
     if (doc == null) return;
+
     final journal = _journal;
     final opId = journal == null
         ? null
@@ -292,19 +295,32 @@ class DriftDocumentRepository implements DocumentRepository {
             documentId: id,
             targetPath: doc.localFilePath,
           );
+
     try {
       // Rev. 2 P1.1 — the R-03 guard. Purging a document must never delete
-      // bytes another version or document still references. When a blob row
-      // exists the store owns the file lifecycle and `release` deletes only at
-      // ref_count 0; when none exists this is pre-P1 data and behaves exactly
-      // as it did before, which is what keeps every existing delete path valid.
+      // bytes another version or document still references.
+      //
+      // Bugfix #4: Asymmetric delete behavior fix.
+      // When a blob row exists, release() handles the refCount check and
+      // only deletes if safe. When none exists, delete the legacy file.
+      // But we NEVER delete a pre-P1 file without checking if it's safe first.
       final blob = await _blobs.findBySha256(doc.sha256Hash);
       if (blob == null) {
-        await _storageService.deleteManagedFile(doc.localFilePath);
+        // Pre-P1 data: check if it's safe to delete before removing the file.
+        final isSafe = await _blobs.isSafeToDeleteBytes(doc.sha256Hash);
+        if (isSafe) {
+          await _storageService.deleteManagedFile(doc.localFilePath);
+        } else {
+          // Another document with identical bytes still exists.
+          // Leave the file intact; the other document owns it.
+        }
       } else {
+        // P1+ data: blob.release() handles all refCount logic.
         await _blobs.release(blob.id);
       }
-      await (_db.delete(_db.localDocuments)..where((t) => t.id.equals(id))).go();
+
+      await (_db.delete(_db.localDocuments)..where((t) => t.id.equals(id)))
+          .go();
       if (opId != null) await journal!.complete(opId);
     } catch (err) {
       if (opId != null) await journal!.fail(opId, err.toString());
@@ -488,3 +504,5 @@ class DriftDocumentRepository implements DocumentRepository {
   Stream<List<DocumentItem>> watchDocumentsByIds(List<String> ids) =>
       _db.watchDocumentsByIds(ids).map((rows) => rows.map(_mapToDomain).toList());
 }
+
+
