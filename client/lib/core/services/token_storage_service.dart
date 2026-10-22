@@ -19,6 +19,34 @@ class TokenStorageService {
   static const _keyDemoMode = 'cloud_demo_mode';
   static const _keyTargetFolder = 'gdrive_target_folder';
 
+  /// Rev.2 P0.5: whether local usage counters may be summarised and sent to the
+  /// user's own configured backend. OFF by default, and the absence of a
+  /// stored value is deliberately read as OFF rather than ON.
+  static const _keyUsageReportingEnabled = 'usage_reporting_enabled';
+
+  Future<void> setUsageReportingEnabled(bool enabled) async {
+    _memoryFallback[_keyUsageReportingEnabled] = enabled ? 'true' : 'false';
+    try {
+      await _storage.write(
+        key: _keyUsageReportingEnabled,
+        value: enabled ? 'true' : 'false',
+      );
+    } catch (e) {
+      debugPrint('SecureStorage setUsageReportingEnabled error: $e');
+    }
+  }
+
+  Future<bool> isUsageReportingEnabled() async {
+    try {
+      final val = await _storage.read(key: _keyUsageReportingEnabled) ??
+          _memoryFallback[_keyUsageReportingEnabled];
+      return val == 'true';
+    } catch (e) {
+      debugPrint('SecureStorage isUsageReportingEnabled error: $e');
+      return _memoryFallback[_keyUsageReportingEnabled] == 'true';
+    }
+  }
+
   Future<void> saveTokens({required String accessToken, String? refreshToken}) async {
     _memoryFallback[_keyAccessToken] = accessToken;
     if (refreshToken != null) _memoryFallback[_keyRefreshToken] = refreshToken;

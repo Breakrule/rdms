@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/custom_toast.dart';
+import '../../../metrics/presentation/productivity_summary_screen.dart';
 import '../../../recovery/presentation/recovery_screen.dart';
 import '../../../sync_center/presentation/sync_center_screen.dart';
 import '../providers/document_providers.dart';
@@ -176,6 +177,23 @@ class SidebarUtilitySection extends ConsumerWidget {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const RecoveryScreen(),
+              ),
+            );
+          },
+        ),
+        // Rev.2 P0.4: the metric self-view. Reached from the utility section
+        // rather than the main toolbar because it is an occasional read, not a
+        // daily action — and because the toolbar is already at its responsive
+        // limit on a 320px phone (homepage_redesign_test guards that).
+        _CompactMenuTile(
+          icon: Icons.insights_rounded,
+          iconColor: const Color(0xFF4F46E5),
+          title: 'Ringkasan Produktivitas',
+          onTap: () {
+            _closeDrawer(context);
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ProductivitySummaryScreen(),
               ),
             );
           },

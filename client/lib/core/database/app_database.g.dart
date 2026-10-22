@@ -244,6 +244,29 @@ class $LocalDocumentsTable extends LocalDocuments
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('00000000-0000-4000-8000-000000000001'),
+  );
+  static const VerificationMeta _currentVersionIdMeta = const VerificationMeta(
+    'currentVersionId',
+  );
+  @override
+  late final GeneratedColumn<String> currentVersionId = GeneratedColumn<String>(
+    'current_version_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -291,6 +314,8 @@ class $LocalDocumentsTable extends LocalDocuments
     isFavorite,
     notes,
     originalFileName,
+    workspaceId,
+    currentVersionId,
     createdAt,
     updatedAt,
   ];
@@ -479,6 +504,24 @@ class $LocalDocumentsTable extends LocalDocuments
         ),
       );
     }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('current_version_id')) {
+      context.handle(
+        _currentVersionIdMeta,
+        currentVersionId.isAcceptableOrUnknown(
+          data['current_version_id']!,
+          _currentVersionIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -584,6 +627,14 @@ class $LocalDocumentsTable extends LocalDocuments
         DriftSqlType.string,
         data['${effectivePrefix}original_file_name'],
       ),
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      currentVersionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}current_version_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -649,6 +700,17 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
   /// convention. fileName stays authoritative for the on-disk layout;
   /// this is user-facing provenance and belongs in the backup manifest.
   final String? originalFileName;
+
+  /// Rev.2 P1.2 profile scope. Every row on a single-user install belongs to
+  /// the personal workspace; the column exists so P2.5 profile partitioning
+  /// and Appendix T are migrations rather than a rearchitecture (plan §2.2.4).
+  final String workspaceId;
+
+  /// Rev.2 P1.2 the version currently in force. Nullable during P1: versions
+  /// are only written once P1.3 rewires import/replace, so existing rows keep
+  /// pointing at nothing until then. Never a foreign-key cascade — deleting a
+  /// version must not delete the document.
+  final String? currentVersionId;
   final DateTime createdAt;
   final DateTime updatedAt;
   const LocalDocument({
@@ -673,6 +735,8 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
     required this.isFavorite,
     this.notes,
     this.originalFileName,
+    required this.workspaceId,
+    this.currentVersionId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -715,6 +779,10 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
     }
     if (!nullToAbsent || originalFileName != null) {
       map['original_file_name'] = Variable<String>(originalFileName);
+    }
+    map['workspace_id'] = Variable<String>(workspaceId);
+    if (!nullToAbsent || currentVersionId != null) {
+      map['current_version_id'] = Variable<String>(currentVersionId);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -760,6 +828,10 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
       originalFileName: originalFileName == null && nullToAbsent
           ? const Value.absent()
           : Value(originalFileName),
+      workspaceId: Value(workspaceId),
+      currentVersionId: currentVersionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(currentVersionId),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -792,6 +864,8 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
       isFavorite: serializer.fromJson<bool>(json['isFavorite']),
       notes: serializer.fromJson<String?>(json['notes']),
       originalFileName: serializer.fromJson<String?>(json['originalFileName']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      currentVersionId: serializer.fromJson<String?>(json['currentVersionId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -821,6 +895,8 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
       'isFavorite': serializer.toJson<bool>(isFavorite),
       'notes': serializer.toJson<String?>(notes),
       'originalFileName': serializer.toJson<String?>(originalFileName),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'currentVersionId': serializer.toJson<String?>(currentVersionId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -848,6 +924,8 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
     bool? isFavorite,
     Value<String?> notes = const Value.absent(),
     Value<String?> originalFileName = const Value.absent(),
+    String? workspaceId,
+    Value<String?> currentVersionId = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => LocalDocument(
@@ -882,6 +960,10 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
     originalFileName: originalFileName.present
         ? originalFileName.value
         : this.originalFileName,
+    workspaceId: workspaceId ?? this.workspaceId,
+    currentVersionId: currentVersionId.present
+        ? currentVersionId.value
+        : this.currentVersionId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -936,6 +1018,12 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
       originalFileName: data.originalFileName.present
           ? data.originalFileName.value
           : this.originalFileName,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      currentVersionId: data.currentVersionId.present
+          ? data.currentVersionId.value
+          : this.currentVersionId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -965,6 +1053,8 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
           ..write('isFavorite: $isFavorite, ')
           ..write('notes: $notes, ')
           ..write('originalFileName: $originalFileName, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('currentVersionId: $currentVersionId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -994,6 +1084,8 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
     isFavorite,
     notes,
     originalFileName,
+    workspaceId,
+    currentVersionId,
     createdAt,
     updatedAt,
   ]);
@@ -1022,6 +1114,8 @@ class LocalDocument extends DataClass implements Insertable<LocalDocument> {
           other.isFavorite == this.isFavorite &&
           other.notes == this.notes &&
           other.originalFileName == this.originalFileName &&
+          other.workspaceId == this.workspaceId &&
+          other.currentVersionId == this.currentVersionId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1048,6 +1142,8 @@ class LocalDocumentsCompanion extends UpdateCompanion<LocalDocument> {
   final Value<bool> isFavorite;
   final Value<String?> notes;
   final Value<String?> originalFileName;
+  final Value<String> workspaceId;
+  final Value<String?> currentVersionId;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -1073,6 +1169,8 @@ class LocalDocumentsCompanion extends UpdateCompanion<LocalDocument> {
     this.isFavorite = const Value.absent(),
     this.notes = const Value.absent(),
     this.originalFileName = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.currentVersionId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1099,6 +1197,8 @@ class LocalDocumentsCompanion extends UpdateCompanion<LocalDocument> {
     this.isFavorite = const Value.absent(),
     this.notes = const Value.absent(),
     this.originalFileName = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.currentVersionId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1134,6 +1234,8 @@ class LocalDocumentsCompanion extends UpdateCompanion<LocalDocument> {
     Expression<bool>? isFavorite,
     Expression<String>? notes,
     Expression<String>? originalFileName,
+    Expression<String>? workspaceId,
+    Expression<String>? currentVersionId,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -1160,6 +1262,8 @@ class LocalDocumentsCompanion extends UpdateCompanion<LocalDocument> {
       if (isFavorite != null) 'is_favorite': isFavorite,
       if (notes != null) 'notes': notes,
       if (originalFileName != null) 'original_file_name': originalFileName,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (currentVersionId != null) 'current_version_id': currentVersionId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1188,6 +1292,8 @@ class LocalDocumentsCompanion extends UpdateCompanion<LocalDocument> {
     Value<bool>? isFavorite,
     Value<String?>? notes,
     Value<String?>? originalFileName,
+    Value<String>? workspaceId,
+    Value<String?>? currentVersionId,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -1214,6 +1320,8 @@ class LocalDocumentsCompanion extends UpdateCompanion<LocalDocument> {
       isFavorite: isFavorite ?? this.isFavorite,
       notes: notes ?? this.notes,
       originalFileName: originalFileName ?? this.originalFileName,
+      workspaceId: workspaceId ?? this.workspaceId,
+      currentVersionId: currentVersionId ?? this.currentVersionId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -1286,6 +1394,12 @@ class LocalDocumentsCompanion extends UpdateCompanion<LocalDocument> {
     if (originalFileName.present) {
       map['original_file_name'] = Variable<String>(originalFileName.value);
     }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (currentVersionId.present) {
+      map['current_version_id'] = Variable<String>(currentVersionId.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1322,6 +1436,8 @@ class LocalDocumentsCompanion extends UpdateCompanion<LocalDocument> {
           ..write('isFavorite: $isFavorite, ')
           ..write('notes: $notes, ')
           ..write('originalFileName: $originalFileName, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('currentVersionId: $currentVersionId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -6098,6 +6214,2580 @@ class SavedViewsCompanion extends UpdateCompanion<SavedView> {
   }
 }
 
+class $UsageCountersTable extends UsageCounters
+    with TableInfo<$UsageCountersTable, UsageCounter> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $UsageCountersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('00000000-0000-4000-8000-000000000001'),
+  );
+  static const VerificationMeta _eventMeta = const VerificationMeta('event');
+  @override
+  late final GeneratedColumn<String> event = GeneratedColumn<String>(
+    'event',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _occurredAtMeta = const VerificationMeta(
+    'occurredAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> occurredAt = GeneratedColumn<DateTime>(
+    'occurred_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sessionIdMeta = const VerificationMeta(
+    'sessionId',
+  );
+  @override
+  late final GeneratedColumn<String> sessionId = GeneratedColumn<String>(
+    'session_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _documentIdMeta = const VerificationMeta(
+    'documentId',
+  );
+  @override
+  late final GeneratedColumn<String> documentId = GeneratedColumn<String>(
+    'document_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _latencyMsMeta = const VerificationMeta(
+    'latencyMs',
+  );
+  @override
+  late final GeneratedColumn<int> latencyMs = GeneratedColumn<int>(
+    'latency_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _countValueMeta = const VerificationMeta(
+    'countValue',
+  );
+  @override
+  late final GeneratedColumn<int> countValue = GeneratedColumn<int>(
+    'count_value',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _contextMeta = const VerificationMeta(
+    'context',
+  );
+  @override
+  late final GeneratedColumn<String> context = GeneratedColumn<String>(
+    'context',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pendingReportMeta = const VerificationMeta(
+    'pendingReport',
+  );
+  @override
+  late final GeneratedColumn<bool> pendingReport = GeneratedColumn<bool>(
+    'pending_report',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("pending_report" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    workspaceId,
+    event,
+    occurredAt,
+    sessionId,
+    documentId,
+    latencyMs,
+    countValue,
+    context,
+    pendingReport,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'usage_counters';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<UsageCounter> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('event')) {
+      context.handle(
+        _eventMeta,
+        event.isAcceptableOrUnknown(data['event']!, _eventMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_eventMeta);
+    }
+    if (data.containsKey('occurred_at')) {
+      context.handle(
+        _occurredAtMeta,
+        occurredAt.isAcceptableOrUnknown(data['occurred_at']!, _occurredAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_occurredAtMeta);
+    }
+    if (data.containsKey('session_id')) {
+      context.handle(
+        _sessionIdMeta,
+        sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta),
+      );
+    }
+    if (data.containsKey('document_id')) {
+      context.handle(
+        _documentIdMeta,
+        documentId.isAcceptableOrUnknown(data['document_id']!, _documentIdMeta),
+      );
+    }
+    if (data.containsKey('latency_ms')) {
+      context.handle(
+        _latencyMsMeta,
+        latencyMs.isAcceptableOrUnknown(data['latency_ms']!, _latencyMsMeta),
+      );
+    }
+    if (data.containsKey('count_value')) {
+      context.handle(
+        _countValueMeta,
+        countValue.isAcceptableOrUnknown(data['count_value']!, _countValueMeta),
+      );
+    }
+    if (data.containsKey('context')) {
+      context.handle(
+        _contextMeta,
+        this.context.isAcceptableOrUnknown(data['context']!, _contextMeta),
+      );
+    }
+    if (data.containsKey('pending_report')) {
+      context.handle(
+        _pendingReportMeta,
+        pendingReport.isAcceptableOrUnknown(
+          data['pending_report']!,
+          _pendingReportMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  UsageCounter map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return UsageCounter(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      event: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}event'],
+      )!,
+      occurredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}occurred_at'],
+      )!,
+      sessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}session_id'],
+      ),
+      documentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}document_id'],
+      ),
+      latencyMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}latency_ms'],
+      ),
+      countValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}count_value'],
+      ),
+      context: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}context'],
+      ),
+      pendingReport: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}pending_report'],
+      )!,
+    );
+  }
+
+  @override
+  $UsageCountersTable createAlias(String alias) {
+    return $UsageCountersTable(attachedDatabase, alias);
+  }
+}
+
+class UsageCounter extends DataClass implements Insertable<UsageCounter> {
+  final String id;
+
+  /// Owning local profile. Defaults to the personal workspace so a single-user
+  /// install never has to supply it; P2.5 profile partitioning relies on this.
+  ///
+  /// The value is a literal, not `kPersonalWorkspaceId`, because drift_dev
+  /// copies this expression into the generated file, which does not import
+  /// `core/database/profile.dart`. `p0_metrics_test.dart` asserts the literal
+  /// and the constant stay identical, so the duplication cannot silently drift.
+  final String workspaceId;
+
+  /// `MetricEvent.value` — fixed vocabulary, not a namespace for new strings.
+  final String event;
+  final DateTime occurredAt;
+
+  /// Groups `search_executed` with the following `document_opened` so M2 can
+  /// compute time-to-open. Random UUID, stripped before any report leaves
+  /// the device.
+  final String? sessionId;
+
+  /// Random document UUID. Local analysis only (e.g. "never opened in 90
+  /// days"); MUST be dropped by the aggregator that builds a P0.5 report.
+  final String? documentId;
+
+  /// Query/operation latency in milliseconds.
+  final int? latencyMs;
+
+  /// Result count, version count, token count — an integer with meaning
+  /// given by `event`.
+  final int? countValue;
+
+  /// A `MetricSource`/`DuplicateAction`/`EditedField`/`IntegrityKind`/
+  /// `MetricErrorCode`/`MimeFamily` value. Bounded and enumerated.
+  final String? context;
+
+  /// Set only while the user has opted in to reporting. Nothing is sent
+  /// unless this is true AND the opt-in switch is on.
+  final bool pendingReport;
+  const UsageCounter({
+    required this.id,
+    required this.workspaceId,
+    required this.event,
+    required this.occurredAt,
+    this.sessionId,
+    this.documentId,
+    this.latencyMs,
+    this.countValue,
+    this.context,
+    required this.pendingReport,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['event'] = Variable<String>(event);
+    map['occurred_at'] = Variable<DateTime>(occurredAt);
+    if (!nullToAbsent || sessionId != null) {
+      map['session_id'] = Variable<String>(sessionId);
+    }
+    if (!nullToAbsent || documentId != null) {
+      map['document_id'] = Variable<String>(documentId);
+    }
+    if (!nullToAbsent || latencyMs != null) {
+      map['latency_ms'] = Variable<int>(latencyMs);
+    }
+    if (!nullToAbsent || countValue != null) {
+      map['count_value'] = Variable<int>(countValue);
+    }
+    if (!nullToAbsent || context != null) {
+      map['context'] = Variable<String>(context);
+    }
+    map['pending_report'] = Variable<bool>(pendingReport);
+    return map;
+  }
+
+  UsageCountersCompanion toCompanion(bool nullToAbsent) {
+    return UsageCountersCompanion(
+      id: Value(id),
+      workspaceId: Value(workspaceId),
+      event: Value(event),
+      occurredAt: Value(occurredAt),
+      sessionId: sessionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sessionId),
+      documentId: documentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(documentId),
+      latencyMs: latencyMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(latencyMs),
+      countValue: countValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(countValue),
+      context: context == null && nullToAbsent
+          ? const Value.absent()
+          : Value(context),
+      pendingReport: Value(pendingReport),
+    );
+  }
+
+  factory UsageCounter.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return UsageCounter(
+      id: serializer.fromJson<String>(json['id']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      event: serializer.fromJson<String>(json['event']),
+      occurredAt: serializer.fromJson<DateTime>(json['occurredAt']),
+      sessionId: serializer.fromJson<String?>(json['sessionId']),
+      documentId: serializer.fromJson<String?>(json['documentId']),
+      latencyMs: serializer.fromJson<int?>(json['latencyMs']),
+      countValue: serializer.fromJson<int?>(json['countValue']),
+      context: serializer.fromJson<String?>(json['context']),
+      pendingReport: serializer.fromJson<bool>(json['pendingReport']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'event': serializer.toJson<String>(event),
+      'occurredAt': serializer.toJson<DateTime>(occurredAt),
+      'sessionId': serializer.toJson<String?>(sessionId),
+      'documentId': serializer.toJson<String?>(documentId),
+      'latencyMs': serializer.toJson<int?>(latencyMs),
+      'countValue': serializer.toJson<int?>(countValue),
+      'context': serializer.toJson<String?>(context),
+      'pendingReport': serializer.toJson<bool>(pendingReport),
+    };
+  }
+
+  UsageCounter copyWith({
+    String? id,
+    String? workspaceId,
+    String? event,
+    DateTime? occurredAt,
+    Value<String?> sessionId = const Value.absent(),
+    Value<String?> documentId = const Value.absent(),
+    Value<int?> latencyMs = const Value.absent(),
+    Value<int?> countValue = const Value.absent(),
+    Value<String?> context = const Value.absent(),
+    bool? pendingReport,
+  }) => UsageCounter(
+    id: id ?? this.id,
+    workspaceId: workspaceId ?? this.workspaceId,
+    event: event ?? this.event,
+    occurredAt: occurredAt ?? this.occurredAt,
+    sessionId: sessionId.present ? sessionId.value : this.sessionId,
+    documentId: documentId.present ? documentId.value : this.documentId,
+    latencyMs: latencyMs.present ? latencyMs.value : this.latencyMs,
+    countValue: countValue.present ? countValue.value : this.countValue,
+    context: context.present ? context.value : this.context,
+    pendingReport: pendingReport ?? this.pendingReport,
+  );
+  UsageCounter copyWithCompanion(UsageCountersCompanion data) {
+    return UsageCounter(
+      id: data.id.present ? data.id.value : this.id,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      event: data.event.present ? data.event.value : this.event,
+      occurredAt: data.occurredAt.present
+          ? data.occurredAt.value
+          : this.occurredAt,
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      documentId: data.documentId.present
+          ? data.documentId.value
+          : this.documentId,
+      latencyMs: data.latencyMs.present ? data.latencyMs.value : this.latencyMs,
+      countValue: data.countValue.present
+          ? data.countValue.value
+          : this.countValue,
+      context: data.context.present ? data.context.value : this.context,
+      pendingReport: data.pendingReport.present
+          ? data.pendingReport.value
+          : this.pendingReport,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UsageCounter(')
+          ..write('id: $id, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('event: $event, ')
+          ..write('occurredAt: $occurredAt, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('documentId: $documentId, ')
+          ..write('latencyMs: $latencyMs, ')
+          ..write('countValue: $countValue, ')
+          ..write('context: $context, ')
+          ..write('pendingReport: $pendingReport')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    workspaceId,
+    event,
+    occurredAt,
+    sessionId,
+    documentId,
+    latencyMs,
+    countValue,
+    context,
+    pendingReport,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is UsageCounter &&
+          other.id == this.id &&
+          other.workspaceId == this.workspaceId &&
+          other.event == this.event &&
+          other.occurredAt == this.occurredAt &&
+          other.sessionId == this.sessionId &&
+          other.documentId == this.documentId &&
+          other.latencyMs == this.latencyMs &&
+          other.countValue == this.countValue &&
+          other.context == this.context &&
+          other.pendingReport == this.pendingReport);
+}
+
+class UsageCountersCompanion extends UpdateCompanion<UsageCounter> {
+  final Value<String> id;
+  final Value<String> workspaceId;
+  final Value<String> event;
+  final Value<DateTime> occurredAt;
+  final Value<String?> sessionId;
+  final Value<String?> documentId;
+  final Value<int?> latencyMs;
+  final Value<int?> countValue;
+  final Value<String?> context;
+  final Value<bool> pendingReport;
+  final Value<int> rowid;
+  const UsageCountersCompanion({
+    this.id = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.event = const Value.absent(),
+    this.occurredAt = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.documentId = const Value.absent(),
+    this.latencyMs = const Value.absent(),
+    this.countValue = const Value.absent(),
+    this.context = const Value.absent(),
+    this.pendingReport = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  UsageCountersCompanion.insert({
+    required String id,
+    this.workspaceId = const Value.absent(),
+    required String event,
+    required DateTime occurredAt,
+    this.sessionId = const Value.absent(),
+    this.documentId = const Value.absent(),
+    this.latencyMs = const Value.absent(),
+    this.countValue = const Value.absent(),
+    this.context = const Value.absent(),
+    this.pendingReport = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       event = Value(event),
+       occurredAt = Value(occurredAt);
+  static Insertable<UsageCounter> custom({
+    Expression<String>? id,
+    Expression<String>? workspaceId,
+    Expression<String>? event,
+    Expression<DateTime>? occurredAt,
+    Expression<String>? sessionId,
+    Expression<String>? documentId,
+    Expression<int>? latencyMs,
+    Expression<int>? countValue,
+    Expression<String>? context,
+    Expression<bool>? pendingReport,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (event != null) 'event': event,
+      if (occurredAt != null) 'occurred_at': occurredAt,
+      if (sessionId != null) 'session_id': sessionId,
+      if (documentId != null) 'document_id': documentId,
+      if (latencyMs != null) 'latency_ms': latencyMs,
+      if (countValue != null) 'count_value': countValue,
+      if (context != null) 'context': context,
+      if (pendingReport != null) 'pending_report': pendingReport,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  UsageCountersCompanion copyWith({
+    Value<String>? id,
+    Value<String>? workspaceId,
+    Value<String>? event,
+    Value<DateTime>? occurredAt,
+    Value<String?>? sessionId,
+    Value<String?>? documentId,
+    Value<int?>? latencyMs,
+    Value<int?>? countValue,
+    Value<String?>? context,
+    Value<bool>? pendingReport,
+    Value<int>? rowid,
+  }) {
+    return UsageCountersCompanion(
+      id: id ?? this.id,
+      workspaceId: workspaceId ?? this.workspaceId,
+      event: event ?? this.event,
+      occurredAt: occurredAt ?? this.occurredAt,
+      sessionId: sessionId ?? this.sessionId,
+      documentId: documentId ?? this.documentId,
+      latencyMs: latencyMs ?? this.latencyMs,
+      countValue: countValue ?? this.countValue,
+      context: context ?? this.context,
+      pendingReport: pendingReport ?? this.pendingReport,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (event.present) {
+      map['event'] = Variable<String>(event.value);
+    }
+    if (occurredAt.present) {
+      map['occurred_at'] = Variable<DateTime>(occurredAt.value);
+    }
+    if (sessionId.present) {
+      map['session_id'] = Variable<String>(sessionId.value);
+    }
+    if (documentId.present) {
+      map['document_id'] = Variable<String>(documentId.value);
+    }
+    if (latencyMs.present) {
+      map['latency_ms'] = Variable<int>(latencyMs.value);
+    }
+    if (countValue.present) {
+      map['count_value'] = Variable<int>(countValue.value);
+    }
+    if (context.present) {
+      map['context'] = Variable<String>(context.value);
+    }
+    if (pendingReport.present) {
+      map['pending_report'] = Variable<bool>(pendingReport.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('UsageCountersCompanion(')
+          ..write('id: $id, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('event: $event, ')
+          ..write('occurredAt: $occurredAt, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('documentId: $documentId, ')
+          ..write('latencyMs: $latencyMs, ')
+          ..write('countValue: $countValue, ')
+          ..write('context: $context, ')
+          ..write('pendingReport: $pendingReport, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ContentBlobsTable extends ContentBlobs
+    with TableInfo<$ContentBlobsTable, ContentBlob> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ContentBlobsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sha256HashMeta = const VerificationMeta(
+    'sha256Hash',
+  );
+  @override
+  late final GeneratedColumn<String> sha256Hash = GeneratedColumn<String>(
+    'sha256_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _relativePathMeta = const VerificationMeta(
+    'relativePath',
+  );
+  @override
+  late final GeneratedColumn<String> relativePath = GeneratedColumn<String>(
+    'relative_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _legacyPathMeta = const VerificationMeta(
+    'legacyPath',
+  );
+  @override
+  late final GeneratedColumn<String> legacyPath = GeneratedColumn<String>(
+    'legacy_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sizeBytesMeta = const VerificationMeta(
+    'sizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> sizeBytes = GeneratedColumn<int>(
+    'size_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
+    'mimeType',
+  );
+  @override
+  late final GeneratedColumn<String> mimeType = GeneratedColumn<String>(
+    'mime_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _refCountMeta = const VerificationMeta(
+    'refCount',
+  );
+  @override
+  late final GeneratedColumn<int> refCount = GeneratedColumn<int>(
+    'ref_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _encryptedMeta = const VerificationMeta(
+    'encrypted',
+  );
+  @override
+  late final GeneratedColumn<bool> encrypted = GeneratedColumn<bool>(
+    'encrypted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("encrypted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _localAvailableMeta = const VerificationMeta(
+    'localAvailable',
+  );
+  @override
+  late final GeneratedColumn<bool> localAvailable = GeneratedColumn<bool>(
+    'local_available',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("local_available" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sha256Hash,
+    relativePath,
+    legacyPath,
+    sizeBytes,
+    mimeType,
+    refCount,
+    encrypted,
+    localAvailable,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'content_blobs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ContentBlob> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('sha256_hash')) {
+      context.handle(
+        _sha256HashMeta,
+        sha256Hash.isAcceptableOrUnknown(data['sha256_hash']!, _sha256HashMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sha256HashMeta);
+    }
+    if (data.containsKey('relative_path')) {
+      context.handle(
+        _relativePathMeta,
+        relativePath.isAcceptableOrUnknown(
+          data['relative_path']!,
+          _relativePathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('legacy_path')) {
+      context.handle(
+        _legacyPathMeta,
+        legacyPath.isAcceptableOrUnknown(data['legacy_path']!, _legacyPathMeta),
+      );
+    }
+    if (data.containsKey('size_bytes')) {
+      context.handle(
+        _sizeBytesMeta,
+        sizeBytes.isAcceptableOrUnknown(data['size_bytes']!, _sizeBytesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sizeBytesMeta);
+    }
+    if (data.containsKey('mime_type')) {
+      context.handle(
+        _mimeTypeMeta,
+        mimeType.isAcceptableOrUnknown(data['mime_type']!, _mimeTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_mimeTypeMeta);
+    }
+    if (data.containsKey('ref_count')) {
+      context.handle(
+        _refCountMeta,
+        refCount.isAcceptableOrUnknown(data['ref_count']!, _refCountMeta),
+      );
+    }
+    if (data.containsKey('encrypted')) {
+      context.handle(
+        _encryptedMeta,
+        encrypted.isAcceptableOrUnknown(data['encrypted']!, _encryptedMeta),
+      );
+    }
+    if (data.containsKey('local_available')) {
+      context.handle(
+        _localAvailableMeta,
+        localAvailable.isAcceptableOrUnknown(
+          data['local_available']!,
+          _localAvailableMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {sha256Hash},
+  ];
+  @override
+  ContentBlob map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ContentBlob(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      sha256Hash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sha256_hash'],
+      )!,
+      relativePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}relative_path'],
+      ),
+      legacyPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}legacy_path'],
+      ),
+      sizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size_bytes'],
+      )!,
+      mimeType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mime_type'],
+      )!,
+      refCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}ref_count'],
+      )!,
+      encrypted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}encrypted'],
+      )!,
+      localAvailable: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}local_available'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ContentBlobsTable createAlias(String alias) {
+    return $ContentBlobsTable(attachedDatabase, alias);
+  }
+}
+
+class ContentBlob extends DataClass implements Insertable<ContentBlob> {
+  final String id;
+
+  /// Content hash the blob is named by. Unique across the library: two
+  /// documents with identical bytes share one blob on purpose.
+  final String sha256Hash;
+  final String? relativePath;
+  final String? legacyPath;
+  final int sizeBytes;
+  final String mimeType;
+
+  /// Number of live references. Maintenance is the store's job, not the
+  /// caller's — see `ContentBlobStore`.
+  final int refCount;
+
+  /// Set by P4.2 once the blob is stored encrypted. False in P1.
+  final bool encrypted;
+
+  /// Bytes that are referenced but not present locally, because the only copy
+  /// is a provider revision (plan risk R-04). Never deleted implicitly.
+  final bool localAvailable;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const ContentBlob({
+    required this.id,
+    required this.sha256Hash,
+    this.relativePath,
+    this.legacyPath,
+    required this.sizeBytes,
+    required this.mimeType,
+    required this.refCount,
+    required this.encrypted,
+    required this.localAvailable,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['sha256_hash'] = Variable<String>(sha256Hash);
+    if (!nullToAbsent || relativePath != null) {
+      map['relative_path'] = Variable<String>(relativePath);
+    }
+    if (!nullToAbsent || legacyPath != null) {
+      map['legacy_path'] = Variable<String>(legacyPath);
+    }
+    map['size_bytes'] = Variable<int>(sizeBytes);
+    map['mime_type'] = Variable<String>(mimeType);
+    map['ref_count'] = Variable<int>(refCount);
+    map['encrypted'] = Variable<bool>(encrypted);
+    map['local_available'] = Variable<bool>(localAvailable);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  ContentBlobsCompanion toCompanion(bool nullToAbsent) {
+    return ContentBlobsCompanion(
+      id: Value(id),
+      sha256Hash: Value(sha256Hash),
+      relativePath: relativePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(relativePath),
+      legacyPath: legacyPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(legacyPath),
+      sizeBytes: Value(sizeBytes),
+      mimeType: Value(mimeType),
+      refCount: Value(refCount),
+      encrypted: Value(encrypted),
+      localAvailable: Value(localAvailable),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory ContentBlob.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ContentBlob(
+      id: serializer.fromJson<String>(json['id']),
+      sha256Hash: serializer.fromJson<String>(json['sha256Hash']),
+      relativePath: serializer.fromJson<String?>(json['relativePath']),
+      legacyPath: serializer.fromJson<String?>(json['legacyPath']),
+      sizeBytes: serializer.fromJson<int>(json['sizeBytes']),
+      mimeType: serializer.fromJson<String>(json['mimeType']),
+      refCount: serializer.fromJson<int>(json['refCount']),
+      encrypted: serializer.fromJson<bool>(json['encrypted']),
+      localAvailable: serializer.fromJson<bool>(json['localAvailable']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'sha256Hash': serializer.toJson<String>(sha256Hash),
+      'relativePath': serializer.toJson<String?>(relativePath),
+      'legacyPath': serializer.toJson<String?>(legacyPath),
+      'sizeBytes': serializer.toJson<int>(sizeBytes),
+      'mimeType': serializer.toJson<String>(mimeType),
+      'refCount': serializer.toJson<int>(refCount),
+      'encrypted': serializer.toJson<bool>(encrypted),
+      'localAvailable': serializer.toJson<bool>(localAvailable),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  ContentBlob copyWith({
+    String? id,
+    String? sha256Hash,
+    Value<String?> relativePath = const Value.absent(),
+    Value<String?> legacyPath = const Value.absent(),
+    int? sizeBytes,
+    String? mimeType,
+    int? refCount,
+    bool? encrypted,
+    bool? localAvailable,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => ContentBlob(
+    id: id ?? this.id,
+    sha256Hash: sha256Hash ?? this.sha256Hash,
+    relativePath: relativePath.present ? relativePath.value : this.relativePath,
+    legacyPath: legacyPath.present ? legacyPath.value : this.legacyPath,
+    sizeBytes: sizeBytes ?? this.sizeBytes,
+    mimeType: mimeType ?? this.mimeType,
+    refCount: refCount ?? this.refCount,
+    encrypted: encrypted ?? this.encrypted,
+    localAvailable: localAvailable ?? this.localAvailable,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  ContentBlob copyWithCompanion(ContentBlobsCompanion data) {
+    return ContentBlob(
+      id: data.id.present ? data.id.value : this.id,
+      sha256Hash: data.sha256Hash.present
+          ? data.sha256Hash.value
+          : this.sha256Hash,
+      relativePath: data.relativePath.present
+          ? data.relativePath.value
+          : this.relativePath,
+      legacyPath: data.legacyPath.present
+          ? data.legacyPath.value
+          : this.legacyPath,
+      sizeBytes: data.sizeBytes.present ? data.sizeBytes.value : this.sizeBytes,
+      mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
+      refCount: data.refCount.present ? data.refCount.value : this.refCount,
+      encrypted: data.encrypted.present ? data.encrypted.value : this.encrypted,
+      localAvailable: data.localAvailable.present
+          ? data.localAvailable.value
+          : this.localAvailable,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentBlob(')
+          ..write('id: $id, ')
+          ..write('sha256Hash: $sha256Hash, ')
+          ..write('relativePath: $relativePath, ')
+          ..write('legacyPath: $legacyPath, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('refCount: $refCount, ')
+          ..write('encrypted: $encrypted, ')
+          ..write('localAvailable: $localAvailable, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    sha256Hash,
+    relativePath,
+    legacyPath,
+    sizeBytes,
+    mimeType,
+    refCount,
+    encrypted,
+    localAvailable,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ContentBlob &&
+          other.id == this.id &&
+          other.sha256Hash == this.sha256Hash &&
+          other.relativePath == this.relativePath &&
+          other.legacyPath == this.legacyPath &&
+          other.sizeBytes == this.sizeBytes &&
+          other.mimeType == this.mimeType &&
+          other.refCount == this.refCount &&
+          other.encrypted == this.encrypted &&
+          other.localAvailable == this.localAvailable &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class ContentBlobsCompanion extends UpdateCompanion<ContentBlob> {
+  final Value<String> id;
+  final Value<String> sha256Hash;
+  final Value<String?> relativePath;
+  final Value<String?> legacyPath;
+  final Value<int> sizeBytes;
+  final Value<String> mimeType;
+  final Value<int> refCount;
+  final Value<bool> encrypted;
+  final Value<bool> localAvailable;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const ContentBlobsCompanion({
+    this.id = const Value.absent(),
+    this.sha256Hash = const Value.absent(),
+    this.relativePath = const Value.absent(),
+    this.legacyPath = const Value.absent(),
+    this.sizeBytes = const Value.absent(),
+    this.mimeType = const Value.absent(),
+    this.refCount = const Value.absent(),
+    this.encrypted = const Value.absent(),
+    this.localAvailable = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ContentBlobsCompanion.insert({
+    required String id,
+    required String sha256Hash,
+    this.relativePath = const Value.absent(),
+    this.legacyPath = const Value.absent(),
+    required int sizeBytes,
+    required String mimeType,
+    this.refCount = const Value.absent(),
+    this.encrypted = const Value.absent(),
+    this.localAvailable = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sha256Hash = Value(sha256Hash),
+       sizeBytes = Value(sizeBytes),
+       mimeType = Value(mimeType);
+  static Insertable<ContentBlob> custom({
+    Expression<String>? id,
+    Expression<String>? sha256Hash,
+    Expression<String>? relativePath,
+    Expression<String>? legacyPath,
+    Expression<int>? sizeBytes,
+    Expression<String>? mimeType,
+    Expression<int>? refCount,
+    Expression<bool>? encrypted,
+    Expression<bool>? localAvailable,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sha256Hash != null) 'sha256_hash': sha256Hash,
+      if (relativePath != null) 'relative_path': relativePath,
+      if (legacyPath != null) 'legacy_path': legacyPath,
+      if (sizeBytes != null) 'size_bytes': sizeBytes,
+      if (mimeType != null) 'mime_type': mimeType,
+      if (refCount != null) 'ref_count': refCount,
+      if (encrypted != null) 'encrypted': encrypted,
+      if (localAvailable != null) 'local_available': localAvailable,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ContentBlobsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? sha256Hash,
+    Value<String?>? relativePath,
+    Value<String?>? legacyPath,
+    Value<int>? sizeBytes,
+    Value<String>? mimeType,
+    Value<int>? refCount,
+    Value<bool>? encrypted,
+    Value<bool>? localAvailable,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return ContentBlobsCompanion(
+      id: id ?? this.id,
+      sha256Hash: sha256Hash ?? this.sha256Hash,
+      relativePath: relativePath ?? this.relativePath,
+      legacyPath: legacyPath ?? this.legacyPath,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      mimeType: mimeType ?? this.mimeType,
+      refCount: refCount ?? this.refCount,
+      encrypted: encrypted ?? this.encrypted,
+      localAvailable: localAvailable ?? this.localAvailable,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (sha256Hash.present) {
+      map['sha256_hash'] = Variable<String>(sha256Hash.value);
+    }
+    if (relativePath.present) {
+      map['relative_path'] = Variable<String>(relativePath.value);
+    }
+    if (legacyPath.present) {
+      map['legacy_path'] = Variable<String>(legacyPath.value);
+    }
+    if (sizeBytes.present) {
+      map['size_bytes'] = Variable<int>(sizeBytes.value);
+    }
+    if (mimeType.present) {
+      map['mime_type'] = Variable<String>(mimeType.value);
+    }
+    if (refCount.present) {
+      map['ref_count'] = Variable<int>(refCount.value);
+    }
+    if (encrypted.present) {
+      map['encrypted'] = Variable<bool>(encrypted.value);
+    }
+    if (localAvailable.present) {
+      map['local_available'] = Variable<bool>(localAvailable.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContentBlobsCompanion(')
+          ..write('id: $id, ')
+          ..write('sha256Hash: $sha256Hash, ')
+          ..write('relativePath: $relativePath, ')
+          ..write('legacyPath: $legacyPath, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('refCount: $refCount, ')
+          ..write('encrypted: $encrypted, ')
+          ..write('localAvailable: $localAvailable, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DocumentVersionsTable extends DocumentVersions
+    with TableInfo<$DocumentVersionsTable, DocumentVersion> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DocumentVersionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _documentIdMeta = const VerificationMeta(
+    'documentId',
+  );
+  @override
+  late final GeneratedColumn<String> documentId = GeneratedColumn<String>(
+    'document_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('00000000-0000-4000-8000-000000000001'),
+  );
+  static const VerificationMeta _versionNumberMeta = const VerificationMeta(
+    'versionNumber',
+  );
+  @override
+  late final GeneratedColumn<int> versionNumber = GeneratedColumn<int>(
+    'version_number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _parentVersionIdMeta = const VerificationMeta(
+    'parentVersionId',
+  );
+  @override
+  late final GeneratedColumn<String> parentVersionId = GeneratedColumn<String>(
+    'parent_version_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sha256HashMeta = const VerificationMeta(
+    'sha256Hash',
+  );
+  @override
+  late final GeneratedColumn<String> sha256Hash = GeneratedColumn<String>(
+    'sha256_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _blobIdMeta = const VerificationMeta('blobId');
+  @override
+  late final GeneratedColumn<String> blobId = GeneratedColumn<String>(
+    'blob_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fileNameMeta = const VerificationMeta(
+    'fileName',
+  );
+  @override
+  late final GeneratedColumn<String> fileName = GeneratedColumn<String>(
+    'file_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originalFileNameMeta = const VerificationMeta(
+    'originalFileName',
+  );
+  @override
+  late final GeneratedColumn<String> originalFileName = GeneratedColumn<String>(
+    'original_file_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fileSizeBytesMeta = const VerificationMeta(
+    'fileSizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> fileSizeBytes = GeneratedColumn<int>(
+    'file_size_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
+    'mimeType',
+  );
+  @override
+  late final GeneratedColumn<String> mimeType = GeneratedColumn<String>(
+    'mime_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _metadataSnapshotMeta = const VerificationMeta(
+    'metadataSnapshot',
+  );
+  @override
+  late final GeneratedColumn<String> metadataSnapshot = GeneratedColumn<String>(
+    'metadata_snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _originBackendMeta = const VerificationMeta(
+    'originBackend',
+  );
+  @override
+  late final GeneratedColumn<String> originBackend = GeneratedColumn<String>(
+    'origin_backend',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('local'),
+  );
+  static const VerificationMeta _providerVersionRefMeta =
+      const VerificationMeta('providerVersionRef');
+  @override
+  late final GeneratedColumn<String> providerVersionRef =
+      GeneratedColumn<String>(
+        'provider_version_ref',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _localAvailableMeta = const VerificationMeta(
+    'localAvailable',
+  );
+  @override
+  late final GeneratedColumn<bool> localAvailable = GeneratedColumn<bool>(
+    'local_available',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("local_available" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _localOnlyMeta = const VerificationMeta(
+    'localOnly',
+  );
+  @override
+  late final GeneratedColumn<bool> localOnly = GeneratedColumn<bool>(
+    'local_only',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("local_only" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _changeNoteMeta = const VerificationMeta(
+    'changeNote',
+  );
+  @override
+  late final GeneratedColumn<String> changeNote = GeneratedColumn<String>(
+    'change_note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _originMeta = const VerificationMeta('origin');
+  @override
+  late final GeneratedColumn<String> origin = GeneratedColumn<String>(
+    'origin',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('import'),
+  );
+  static const VerificationMeta _createdByDeviceMeta = const VerificationMeta(
+    'createdByDevice',
+  );
+  @override
+  late final GeneratedColumn<String> createdByDevice = GeneratedColumn<String>(
+    'created_by_device',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    documentId,
+    workspaceId,
+    versionNumber,
+    parentVersionId,
+    sha256Hash,
+    blobId,
+    fileName,
+    originalFileName,
+    fileSizeBytes,
+    mimeType,
+    metadataSnapshot,
+    originBackend,
+    providerVersionRef,
+    localAvailable,
+    localOnly,
+    changeNote,
+    origin,
+    createdByDevice,
+    createdAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'document_versions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DocumentVersion> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('document_id')) {
+      context.handle(
+        _documentIdMeta,
+        documentId.isAcceptableOrUnknown(data['document_id']!, _documentIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_documentIdMeta);
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('version_number')) {
+      context.handle(
+        _versionNumberMeta,
+        versionNumber.isAcceptableOrUnknown(
+          data['version_number']!,
+          _versionNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_versionNumberMeta);
+    }
+    if (data.containsKey('parent_version_id')) {
+      context.handle(
+        _parentVersionIdMeta,
+        parentVersionId.isAcceptableOrUnknown(
+          data['parent_version_id']!,
+          _parentVersionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sha256_hash')) {
+      context.handle(
+        _sha256HashMeta,
+        sha256Hash.isAcceptableOrUnknown(data['sha256_hash']!, _sha256HashMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sha256HashMeta);
+    }
+    if (data.containsKey('blob_id')) {
+      context.handle(
+        _blobIdMeta,
+        blobId.isAcceptableOrUnknown(data['blob_id']!, _blobIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_blobIdMeta);
+    }
+    if (data.containsKey('file_name')) {
+      context.handle(
+        _fileNameMeta,
+        fileName.isAcceptableOrUnknown(data['file_name']!, _fileNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileNameMeta);
+    }
+    if (data.containsKey('original_file_name')) {
+      context.handle(
+        _originalFileNameMeta,
+        originalFileName.isAcceptableOrUnknown(
+          data['original_file_name']!,
+          _originalFileNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('file_size_bytes')) {
+      context.handle(
+        _fileSizeBytesMeta,
+        fileSizeBytes.isAcceptableOrUnknown(
+          data['file_size_bytes']!,
+          _fileSizeBytesMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_fileSizeBytesMeta);
+    }
+    if (data.containsKey('mime_type')) {
+      context.handle(
+        _mimeTypeMeta,
+        mimeType.isAcceptableOrUnknown(data['mime_type']!, _mimeTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_mimeTypeMeta);
+    }
+    if (data.containsKey('metadata_snapshot')) {
+      context.handle(
+        _metadataSnapshotMeta,
+        metadataSnapshot.isAcceptableOrUnknown(
+          data['metadata_snapshot']!,
+          _metadataSnapshotMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_metadataSnapshotMeta);
+    }
+    if (data.containsKey('origin_backend')) {
+      context.handle(
+        _originBackendMeta,
+        originBackend.isAcceptableOrUnknown(
+          data['origin_backend']!,
+          _originBackendMeta,
+        ),
+      );
+    }
+    if (data.containsKey('provider_version_ref')) {
+      context.handle(
+        _providerVersionRefMeta,
+        providerVersionRef.isAcceptableOrUnknown(
+          data['provider_version_ref']!,
+          _providerVersionRefMeta,
+        ),
+      );
+    }
+    if (data.containsKey('local_available')) {
+      context.handle(
+        _localAvailableMeta,
+        localAvailable.isAcceptableOrUnknown(
+          data['local_available']!,
+          _localAvailableMeta,
+        ),
+      );
+    }
+    if (data.containsKey('local_only')) {
+      context.handle(
+        _localOnlyMeta,
+        localOnly.isAcceptableOrUnknown(data['local_only']!, _localOnlyMeta),
+      );
+    }
+    if (data.containsKey('change_note')) {
+      context.handle(
+        _changeNoteMeta,
+        changeNote.isAcceptableOrUnknown(data['change_note']!, _changeNoteMeta),
+      );
+    }
+    if (data.containsKey('origin')) {
+      context.handle(
+        _originMeta,
+        origin.isAcceptableOrUnknown(data['origin']!, _originMeta),
+      );
+    }
+    if (data.containsKey('created_by_device')) {
+      context.handle(
+        _createdByDeviceMeta,
+        createdByDevice.isAcceptableOrUnknown(
+          data['created_by_device']!,
+          _createdByDeviceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {documentId, versionNumber},
+  ];
+  @override
+  DocumentVersion map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DocumentVersion(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      documentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}document_id'],
+      )!,
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      versionNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version_number'],
+      )!,
+      parentVersionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_version_id'],
+      ),
+      sha256Hash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sha256_hash'],
+      )!,
+      blobId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}blob_id'],
+      )!,
+      fileName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_name'],
+      )!,
+      originalFileName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}original_file_name'],
+      ),
+      fileSizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}file_size_bytes'],
+      )!,
+      mimeType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mime_type'],
+      )!,
+      metadataSnapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}metadata_snapshot'],
+      )!,
+      originBackend: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin_backend'],
+      )!,
+      providerVersionRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}provider_version_ref'],
+      ),
+      localAvailable: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}local_available'],
+      )!,
+      localOnly: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}local_only'],
+      )!,
+      changeNote: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}change_note'],
+      ),
+      origin: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}origin'],
+      )!,
+      createdByDevice: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}created_by_device'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $DocumentVersionsTable createAlias(String alias) {
+    return $DocumentVersionsTable(attachedDatabase, alias);
+  }
+}
+
+class DocumentVersion extends DataClass implements Insertable<DocumentVersion> {
+  final String id;
+
+  /// The stable document this version belongs to.
+  final String documentId;
+
+  /// Profile/workspace scope. Defaults to the personal workspace so a
+  /// single-user install need not supply it, and so Appendix T's shared
+  /// workspaces become a migration rather than a rewrite (plan §2.2.4).
+  final String workspaceId;
+  final int versionNumber;
+
+  /// Which version this one was derived from, for the lineage view.
+  final String? parentVersionId;
+
+  /// Redundant with the blob on purpose: a version must remain describing its
+  /// content even if the blob row is later evicted from local storage.
+  final String sha256Hash;
+  final String blobId;
+
+  /// File name and description AS THEY WERE when this version was current, so
+  /// history shows what the record was called then rather than now.
+  final String fileName;
+  final String? originalFileName;
+  final int fileSizeBytes;
+  final String mimeType;
+  final String metadataSnapshot;
+
+  /// `local` | `gdrive` | `none` — where the owner's bytes additionally exist.
+  /// The server never resolves these; it only tells another of the same user's
+  /// devices which of their own accounts to look in (plan §2.2.1).
+  final String originBackend;
+
+  /// Provider-side revision id (e.g. Google Drive revisionId). Best-effort:
+  /// provider retention is bounded, so this is a pointer, not a guarantee.
+  final String? providerVersionRef;
+
+  /// True when this version's bytes are on this device.
+  final bool localAvailable;
+
+  /// True when the user has NOT opted this document into cloud backup.
+  final bool localOnly;
+  final String? changeNote;
+
+  /// How the version came to exist: import | replaced | restored |
+  /// external_modification. Enumerated, not free text.
+  final String origin;
+
+  /// Local device/profile attribution label. NOT an audit identity —
+  /// see plan verdict V-3 (a personal timeline is not evidence-grade audit).
+  final String? createdByDevice;
+  final DateTime createdAt;
+
+  /// Tombstone, added here rather than in a later version so the change feed
+  /// (P2.1) has something to tombstone against.
+  final DateTime? deletedAt;
+  const DocumentVersion({
+    required this.id,
+    required this.documentId,
+    required this.workspaceId,
+    required this.versionNumber,
+    this.parentVersionId,
+    required this.sha256Hash,
+    required this.blobId,
+    required this.fileName,
+    this.originalFileName,
+    required this.fileSizeBytes,
+    required this.mimeType,
+    required this.metadataSnapshot,
+    required this.originBackend,
+    this.providerVersionRef,
+    required this.localAvailable,
+    required this.localOnly,
+    this.changeNote,
+    required this.origin,
+    this.createdByDevice,
+    required this.createdAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['document_id'] = Variable<String>(documentId);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['version_number'] = Variable<int>(versionNumber);
+    if (!nullToAbsent || parentVersionId != null) {
+      map['parent_version_id'] = Variable<String>(parentVersionId);
+    }
+    map['sha256_hash'] = Variable<String>(sha256Hash);
+    map['blob_id'] = Variable<String>(blobId);
+    map['file_name'] = Variable<String>(fileName);
+    if (!nullToAbsent || originalFileName != null) {
+      map['original_file_name'] = Variable<String>(originalFileName);
+    }
+    map['file_size_bytes'] = Variable<int>(fileSizeBytes);
+    map['mime_type'] = Variable<String>(mimeType);
+    map['metadata_snapshot'] = Variable<String>(metadataSnapshot);
+    map['origin_backend'] = Variable<String>(originBackend);
+    if (!nullToAbsent || providerVersionRef != null) {
+      map['provider_version_ref'] = Variable<String>(providerVersionRef);
+    }
+    map['local_available'] = Variable<bool>(localAvailable);
+    map['local_only'] = Variable<bool>(localOnly);
+    if (!nullToAbsent || changeNote != null) {
+      map['change_note'] = Variable<String>(changeNote);
+    }
+    map['origin'] = Variable<String>(origin);
+    if (!nullToAbsent || createdByDevice != null) {
+      map['created_by_device'] = Variable<String>(createdByDevice);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  DocumentVersionsCompanion toCompanion(bool nullToAbsent) {
+    return DocumentVersionsCompanion(
+      id: Value(id),
+      documentId: Value(documentId),
+      workspaceId: Value(workspaceId),
+      versionNumber: Value(versionNumber),
+      parentVersionId: parentVersionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentVersionId),
+      sha256Hash: Value(sha256Hash),
+      blobId: Value(blobId),
+      fileName: Value(fileName),
+      originalFileName: originalFileName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalFileName),
+      fileSizeBytes: Value(fileSizeBytes),
+      mimeType: Value(mimeType),
+      metadataSnapshot: Value(metadataSnapshot),
+      originBackend: Value(originBackend),
+      providerVersionRef: providerVersionRef == null && nullToAbsent
+          ? const Value.absent()
+          : Value(providerVersionRef),
+      localAvailable: Value(localAvailable),
+      localOnly: Value(localOnly),
+      changeNote: changeNote == null && nullToAbsent
+          ? const Value.absent()
+          : Value(changeNote),
+      origin: Value(origin),
+      createdByDevice: createdByDevice == null && nullToAbsent
+          ? const Value.absent()
+          : Value(createdByDevice),
+      createdAt: Value(createdAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory DocumentVersion.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DocumentVersion(
+      id: serializer.fromJson<String>(json['id']),
+      documentId: serializer.fromJson<String>(json['documentId']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      versionNumber: serializer.fromJson<int>(json['versionNumber']),
+      parentVersionId: serializer.fromJson<String?>(json['parentVersionId']),
+      sha256Hash: serializer.fromJson<String>(json['sha256Hash']),
+      blobId: serializer.fromJson<String>(json['blobId']),
+      fileName: serializer.fromJson<String>(json['fileName']),
+      originalFileName: serializer.fromJson<String?>(json['originalFileName']),
+      fileSizeBytes: serializer.fromJson<int>(json['fileSizeBytes']),
+      mimeType: serializer.fromJson<String>(json['mimeType']),
+      metadataSnapshot: serializer.fromJson<String>(json['metadataSnapshot']),
+      originBackend: serializer.fromJson<String>(json['originBackend']),
+      providerVersionRef: serializer.fromJson<String?>(
+        json['providerVersionRef'],
+      ),
+      localAvailable: serializer.fromJson<bool>(json['localAvailable']),
+      localOnly: serializer.fromJson<bool>(json['localOnly']),
+      changeNote: serializer.fromJson<String?>(json['changeNote']),
+      origin: serializer.fromJson<String>(json['origin']),
+      createdByDevice: serializer.fromJson<String?>(json['createdByDevice']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'documentId': serializer.toJson<String>(documentId),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'versionNumber': serializer.toJson<int>(versionNumber),
+      'parentVersionId': serializer.toJson<String?>(parentVersionId),
+      'sha256Hash': serializer.toJson<String>(sha256Hash),
+      'blobId': serializer.toJson<String>(blobId),
+      'fileName': serializer.toJson<String>(fileName),
+      'originalFileName': serializer.toJson<String?>(originalFileName),
+      'fileSizeBytes': serializer.toJson<int>(fileSizeBytes),
+      'mimeType': serializer.toJson<String>(mimeType),
+      'metadataSnapshot': serializer.toJson<String>(metadataSnapshot),
+      'originBackend': serializer.toJson<String>(originBackend),
+      'providerVersionRef': serializer.toJson<String?>(providerVersionRef),
+      'localAvailable': serializer.toJson<bool>(localAvailable),
+      'localOnly': serializer.toJson<bool>(localOnly),
+      'changeNote': serializer.toJson<String?>(changeNote),
+      'origin': serializer.toJson<String>(origin),
+      'createdByDevice': serializer.toJson<String?>(createdByDevice),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  DocumentVersion copyWith({
+    String? id,
+    String? documentId,
+    String? workspaceId,
+    int? versionNumber,
+    Value<String?> parentVersionId = const Value.absent(),
+    String? sha256Hash,
+    String? blobId,
+    String? fileName,
+    Value<String?> originalFileName = const Value.absent(),
+    int? fileSizeBytes,
+    String? mimeType,
+    String? metadataSnapshot,
+    String? originBackend,
+    Value<String?> providerVersionRef = const Value.absent(),
+    bool? localAvailable,
+    bool? localOnly,
+    Value<String?> changeNote = const Value.absent(),
+    String? origin,
+    Value<String?> createdByDevice = const Value.absent(),
+    DateTime? createdAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => DocumentVersion(
+    id: id ?? this.id,
+    documentId: documentId ?? this.documentId,
+    workspaceId: workspaceId ?? this.workspaceId,
+    versionNumber: versionNumber ?? this.versionNumber,
+    parentVersionId: parentVersionId.present
+        ? parentVersionId.value
+        : this.parentVersionId,
+    sha256Hash: sha256Hash ?? this.sha256Hash,
+    blobId: blobId ?? this.blobId,
+    fileName: fileName ?? this.fileName,
+    originalFileName: originalFileName.present
+        ? originalFileName.value
+        : this.originalFileName,
+    fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
+    mimeType: mimeType ?? this.mimeType,
+    metadataSnapshot: metadataSnapshot ?? this.metadataSnapshot,
+    originBackend: originBackend ?? this.originBackend,
+    providerVersionRef: providerVersionRef.present
+        ? providerVersionRef.value
+        : this.providerVersionRef,
+    localAvailable: localAvailable ?? this.localAvailable,
+    localOnly: localOnly ?? this.localOnly,
+    changeNote: changeNote.present ? changeNote.value : this.changeNote,
+    origin: origin ?? this.origin,
+    createdByDevice: createdByDevice.present
+        ? createdByDevice.value
+        : this.createdByDevice,
+    createdAt: createdAt ?? this.createdAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  DocumentVersion copyWithCompanion(DocumentVersionsCompanion data) {
+    return DocumentVersion(
+      id: data.id.present ? data.id.value : this.id,
+      documentId: data.documentId.present
+          ? data.documentId.value
+          : this.documentId,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      versionNumber: data.versionNumber.present
+          ? data.versionNumber.value
+          : this.versionNumber,
+      parentVersionId: data.parentVersionId.present
+          ? data.parentVersionId.value
+          : this.parentVersionId,
+      sha256Hash: data.sha256Hash.present
+          ? data.sha256Hash.value
+          : this.sha256Hash,
+      blobId: data.blobId.present ? data.blobId.value : this.blobId,
+      fileName: data.fileName.present ? data.fileName.value : this.fileName,
+      originalFileName: data.originalFileName.present
+          ? data.originalFileName.value
+          : this.originalFileName,
+      fileSizeBytes: data.fileSizeBytes.present
+          ? data.fileSizeBytes.value
+          : this.fileSizeBytes,
+      mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
+      metadataSnapshot: data.metadataSnapshot.present
+          ? data.metadataSnapshot.value
+          : this.metadataSnapshot,
+      originBackend: data.originBackend.present
+          ? data.originBackend.value
+          : this.originBackend,
+      providerVersionRef: data.providerVersionRef.present
+          ? data.providerVersionRef.value
+          : this.providerVersionRef,
+      localAvailable: data.localAvailable.present
+          ? data.localAvailable.value
+          : this.localAvailable,
+      localOnly: data.localOnly.present ? data.localOnly.value : this.localOnly,
+      changeNote: data.changeNote.present
+          ? data.changeNote.value
+          : this.changeNote,
+      origin: data.origin.present ? data.origin.value : this.origin,
+      createdByDevice: data.createdByDevice.present
+          ? data.createdByDevice.value
+          : this.createdByDevice,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DocumentVersion(')
+          ..write('id: $id, ')
+          ..write('documentId: $documentId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('versionNumber: $versionNumber, ')
+          ..write('parentVersionId: $parentVersionId, ')
+          ..write('sha256Hash: $sha256Hash, ')
+          ..write('blobId: $blobId, ')
+          ..write('fileName: $fileName, ')
+          ..write('originalFileName: $originalFileName, ')
+          ..write('fileSizeBytes: $fileSizeBytes, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('metadataSnapshot: $metadataSnapshot, ')
+          ..write('originBackend: $originBackend, ')
+          ..write('providerVersionRef: $providerVersionRef, ')
+          ..write('localAvailable: $localAvailable, ')
+          ..write('localOnly: $localOnly, ')
+          ..write('changeNote: $changeNote, ')
+          ..write('origin: $origin, ')
+          ..write('createdByDevice: $createdByDevice, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    documentId,
+    workspaceId,
+    versionNumber,
+    parentVersionId,
+    sha256Hash,
+    blobId,
+    fileName,
+    originalFileName,
+    fileSizeBytes,
+    mimeType,
+    metadataSnapshot,
+    originBackend,
+    providerVersionRef,
+    localAvailable,
+    localOnly,
+    changeNote,
+    origin,
+    createdByDevice,
+    createdAt,
+    deletedAt,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DocumentVersion &&
+          other.id == this.id &&
+          other.documentId == this.documentId &&
+          other.workspaceId == this.workspaceId &&
+          other.versionNumber == this.versionNumber &&
+          other.parentVersionId == this.parentVersionId &&
+          other.sha256Hash == this.sha256Hash &&
+          other.blobId == this.blobId &&
+          other.fileName == this.fileName &&
+          other.originalFileName == this.originalFileName &&
+          other.fileSizeBytes == this.fileSizeBytes &&
+          other.mimeType == this.mimeType &&
+          other.metadataSnapshot == this.metadataSnapshot &&
+          other.originBackend == this.originBackend &&
+          other.providerVersionRef == this.providerVersionRef &&
+          other.localAvailable == this.localAvailable &&
+          other.localOnly == this.localOnly &&
+          other.changeNote == this.changeNote &&
+          other.origin == this.origin &&
+          other.createdByDevice == this.createdByDevice &&
+          other.createdAt == this.createdAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class DocumentVersionsCompanion extends UpdateCompanion<DocumentVersion> {
+  final Value<String> id;
+  final Value<String> documentId;
+  final Value<String> workspaceId;
+  final Value<int> versionNumber;
+  final Value<String?> parentVersionId;
+  final Value<String> sha256Hash;
+  final Value<String> blobId;
+  final Value<String> fileName;
+  final Value<String?> originalFileName;
+  final Value<int> fileSizeBytes;
+  final Value<String> mimeType;
+  final Value<String> metadataSnapshot;
+  final Value<String> originBackend;
+  final Value<String?> providerVersionRef;
+  final Value<bool> localAvailable;
+  final Value<bool> localOnly;
+  final Value<String?> changeNote;
+  final Value<String> origin;
+  final Value<String?> createdByDevice;
+  final Value<DateTime> createdAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const DocumentVersionsCompanion({
+    this.id = const Value.absent(),
+    this.documentId = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.versionNumber = const Value.absent(),
+    this.parentVersionId = const Value.absent(),
+    this.sha256Hash = const Value.absent(),
+    this.blobId = const Value.absent(),
+    this.fileName = const Value.absent(),
+    this.originalFileName = const Value.absent(),
+    this.fileSizeBytes = const Value.absent(),
+    this.mimeType = const Value.absent(),
+    this.metadataSnapshot = const Value.absent(),
+    this.originBackend = const Value.absent(),
+    this.providerVersionRef = const Value.absent(),
+    this.localAvailable = const Value.absent(),
+    this.localOnly = const Value.absent(),
+    this.changeNote = const Value.absent(),
+    this.origin = const Value.absent(),
+    this.createdByDevice = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DocumentVersionsCompanion.insert({
+    required String id,
+    required String documentId,
+    this.workspaceId = const Value.absent(),
+    required int versionNumber,
+    this.parentVersionId = const Value.absent(),
+    required String sha256Hash,
+    required String blobId,
+    required String fileName,
+    this.originalFileName = const Value.absent(),
+    required int fileSizeBytes,
+    required String mimeType,
+    required String metadataSnapshot,
+    this.originBackend = const Value.absent(),
+    this.providerVersionRef = const Value.absent(),
+    this.localAvailable = const Value.absent(),
+    this.localOnly = const Value.absent(),
+    this.changeNote = const Value.absent(),
+    this.origin = const Value.absent(),
+    this.createdByDevice = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       documentId = Value(documentId),
+       versionNumber = Value(versionNumber),
+       sha256Hash = Value(sha256Hash),
+       blobId = Value(blobId),
+       fileName = Value(fileName),
+       fileSizeBytes = Value(fileSizeBytes),
+       mimeType = Value(mimeType),
+       metadataSnapshot = Value(metadataSnapshot);
+  static Insertable<DocumentVersion> custom({
+    Expression<String>? id,
+    Expression<String>? documentId,
+    Expression<String>? workspaceId,
+    Expression<int>? versionNumber,
+    Expression<String>? parentVersionId,
+    Expression<String>? sha256Hash,
+    Expression<String>? blobId,
+    Expression<String>? fileName,
+    Expression<String>? originalFileName,
+    Expression<int>? fileSizeBytes,
+    Expression<String>? mimeType,
+    Expression<String>? metadataSnapshot,
+    Expression<String>? originBackend,
+    Expression<String>? providerVersionRef,
+    Expression<bool>? localAvailable,
+    Expression<bool>? localOnly,
+    Expression<String>? changeNote,
+    Expression<String>? origin,
+    Expression<String>? createdByDevice,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (documentId != null) 'document_id': documentId,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (versionNumber != null) 'version_number': versionNumber,
+      if (parentVersionId != null) 'parent_version_id': parentVersionId,
+      if (sha256Hash != null) 'sha256_hash': sha256Hash,
+      if (blobId != null) 'blob_id': blobId,
+      if (fileName != null) 'file_name': fileName,
+      if (originalFileName != null) 'original_file_name': originalFileName,
+      if (fileSizeBytes != null) 'file_size_bytes': fileSizeBytes,
+      if (mimeType != null) 'mime_type': mimeType,
+      if (metadataSnapshot != null) 'metadata_snapshot': metadataSnapshot,
+      if (originBackend != null) 'origin_backend': originBackend,
+      if (providerVersionRef != null)
+        'provider_version_ref': providerVersionRef,
+      if (localAvailable != null) 'local_available': localAvailable,
+      if (localOnly != null) 'local_only': localOnly,
+      if (changeNote != null) 'change_note': changeNote,
+      if (origin != null) 'origin': origin,
+      if (createdByDevice != null) 'created_by_device': createdByDevice,
+      if (createdAt != null) 'created_at': createdAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DocumentVersionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? documentId,
+    Value<String>? workspaceId,
+    Value<int>? versionNumber,
+    Value<String?>? parentVersionId,
+    Value<String>? sha256Hash,
+    Value<String>? blobId,
+    Value<String>? fileName,
+    Value<String?>? originalFileName,
+    Value<int>? fileSizeBytes,
+    Value<String>? mimeType,
+    Value<String>? metadataSnapshot,
+    Value<String>? originBackend,
+    Value<String?>? providerVersionRef,
+    Value<bool>? localAvailable,
+    Value<bool>? localOnly,
+    Value<String?>? changeNote,
+    Value<String>? origin,
+    Value<String?>? createdByDevice,
+    Value<DateTime>? createdAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return DocumentVersionsCompanion(
+      id: id ?? this.id,
+      documentId: documentId ?? this.documentId,
+      workspaceId: workspaceId ?? this.workspaceId,
+      versionNumber: versionNumber ?? this.versionNumber,
+      parentVersionId: parentVersionId ?? this.parentVersionId,
+      sha256Hash: sha256Hash ?? this.sha256Hash,
+      blobId: blobId ?? this.blobId,
+      fileName: fileName ?? this.fileName,
+      originalFileName: originalFileName ?? this.originalFileName,
+      fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
+      mimeType: mimeType ?? this.mimeType,
+      metadataSnapshot: metadataSnapshot ?? this.metadataSnapshot,
+      originBackend: originBackend ?? this.originBackend,
+      providerVersionRef: providerVersionRef ?? this.providerVersionRef,
+      localAvailable: localAvailable ?? this.localAvailable,
+      localOnly: localOnly ?? this.localOnly,
+      changeNote: changeNote ?? this.changeNote,
+      origin: origin ?? this.origin,
+      createdByDevice: createdByDevice ?? this.createdByDevice,
+      createdAt: createdAt ?? this.createdAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (documentId.present) {
+      map['document_id'] = Variable<String>(documentId.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (versionNumber.present) {
+      map['version_number'] = Variable<int>(versionNumber.value);
+    }
+    if (parentVersionId.present) {
+      map['parent_version_id'] = Variable<String>(parentVersionId.value);
+    }
+    if (sha256Hash.present) {
+      map['sha256_hash'] = Variable<String>(sha256Hash.value);
+    }
+    if (blobId.present) {
+      map['blob_id'] = Variable<String>(blobId.value);
+    }
+    if (fileName.present) {
+      map['file_name'] = Variable<String>(fileName.value);
+    }
+    if (originalFileName.present) {
+      map['original_file_name'] = Variable<String>(originalFileName.value);
+    }
+    if (fileSizeBytes.present) {
+      map['file_size_bytes'] = Variable<int>(fileSizeBytes.value);
+    }
+    if (mimeType.present) {
+      map['mime_type'] = Variable<String>(mimeType.value);
+    }
+    if (metadataSnapshot.present) {
+      map['metadata_snapshot'] = Variable<String>(metadataSnapshot.value);
+    }
+    if (originBackend.present) {
+      map['origin_backend'] = Variable<String>(originBackend.value);
+    }
+    if (providerVersionRef.present) {
+      map['provider_version_ref'] = Variable<String>(providerVersionRef.value);
+    }
+    if (localAvailable.present) {
+      map['local_available'] = Variable<bool>(localAvailable.value);
+    }
+    if (localOnly.present) {
+      map['local_only'] = Variable<bool>(localOnly.value);
+    }
+    if (changeNote.present) {
+      map['change_note'] = Variable<String>(changeNote.value);
+    }
+    if (origin.present) {
+      map['origin'] = Variable<String>(origin.value);
+    }
+    if (createdByDevice.present) {
+      map['created_by_device'] = Variable<String>(createdByDevice.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DocumentVersionsCompanion(')
+          ..write('id: $id, ')
+          ..write('documentId: $documentId, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('versionNumber: $versionNumber, ')
+          ..write('parentVersionId: $parentVersionId, ')
+          ..write('sha256Hash: $sha256Hash, ')
+          ..write('blobId: $blobId, ')
+          ..write('fileName: $fileName, ')
+          ..write('originalFileName: $originalFileName, ')
+          ..write('fileSizeBytes: $fileSizeBytes, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('metadataSnapshot: $metadataSnapshot, ')
+          ..write('originBackend: $originBackend, ')
+          ..write('providerVersionRef: $providerVersionRef, ')
+          ..write('localAvailable: $localAvailable, ')
+          ..write('localOnly: $localOnly, ')
+          ..write('changeNote: $changeNote, ')
+          ..write('origin: $origin, ')
+          ..write('createdByDevice: $createdByDevice, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6121,6 +8811,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $SavedViewsTable savedViews = $SavedViewsTable(this);
+  late final $UsageCountersTable usageCounters = $UsageCountersTable(this);
+  late final $ContentBlobsTable contentBlobs = $ContentBlobsTable(this);
+  late final $DocumentVersionsTable documentVersions = $DocumentVersionsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6138,6 +8833,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     collections,
     collectionItems,
     savedViews,
+    usageCounters,
+    contentBlobs,
+    documentVersions,
   ];
 }
 
@@ -6164,6 +8862,8 @@ typedef $$LocalDocumentsTableCreateCompanionBuilder =
       Value<bool> isFavorite,
       Value<String?> notes,
       Value<String?> originalFileName,
+      Value<String> workspaceId,
+      Value<String?> currentVersionId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -6191,6 +8891,8 @@ typedef $$LocalDocumentsTableUpdateCompanionBuilder =
       Value<bool> isFavorite,
       Value<String?> notes,
       Value<String?> originalFileName,
+      Value<String> workspaceId,
+      Value<String?> currentVersionId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -6307,6 +9009,16 @@ class $$LocalDocumentsTableFilterComposer
 
   ColumnFilters<String> get originalFileName => $composableBuilder(
     column: $table.originalFileName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currentVersionId => $composableBuilder(
+    column: $table.currentVersionId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6435,6 +9147,16 @@ class $$LocalDocumentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currentVersionId => $composableBuilder(
+    column: $table.currentVersionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -6546,6 +9268,16 @@ class $$LocalDocumentsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get currentVersionId => $composableBuilder(
+    column: $table.currentVersionId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -6607,6 +9339,8 @@ class $$LocalDocumentsTableTableManager
                 Value<bool> isFavorite = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<String?> originalFileName = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String?> currentVersionId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -6632,6 +9366,8 @@ class $$LocalDocumentsTableTableManager
                 isFavorite: isFavorite,
                 notes: notes,
                 originalFileName: originalFileName,
+                workspaceId: workspaceId,
+                currentVersionId: currentVersionId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -6659,6 +9395,8 @@ class $$LocalDocumentsTableTableManager
                 Value<bool> isFavorite = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<String?> originalFileName = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String?> currentVersionId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -6684,6 +9422,8 @@ class $$LocalDocumentsTableTableManager
                 isFavorite: isFavorite,
                 notes: notes,
                 originalFileName: originalFileName,
+                workspaceId: workspaceId,
+                currentVersionId: currentVersionId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -9367,6 +12107,1196 @@ typedef $$SavedViewsTableProcessedTableManager =
       SavedView,
       PrefetchHooks Function()
     >;
+typedef $$UsageCountersTableCreateCompanionBuilder =
+    UsageCountersCompanion Function({
+      required String id,
+      Value<String> workspaceId,
+      required String event,
+      required DateTime occurredAt,
+      Value<String?> sessionId,
+      Value<String?> documentId,
+      Value<int?> latencyMs,
+      Value<int?> countValue,
+      Value<String?> context,
+      Value<bool> pendingReport,
+      Value<int> rowid,
+    });
+typedef $$UsageCountersTableUpdateCompanionBuilder =
+    UsageCountersCompanion Function({
+      Value<String> id,
+      Value<String> workspaceId,
+      Value<String> event,
+      Value<DateTime> occurredAt,
+      Value<String?> sessionId,
+      Value<String?> documentId,
+      Value<int?> latencyMs,
+      Value<int?> countValue,
+      Value<String?> context,
+      Value<bool> pendingReport,
+      Value<int> rowid,
+    });
+
+class $$UsageCountersTableFilterComposer
+    extends Composer<_$AppDatabase, $UsageCountersTable> {
+  $$UsageCountersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get event => $composableBuilder(
+    column: $table.event,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get documentId => $composableBuilder(
+    column: $table.documentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get latencyMs => $composableBuilder(
+    column: $table.latencyMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get countValue => $composableBuilder(
+    column: $table.countValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get context => $composableBuilder(
+    column: $table.context,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get pendingReport => $composableBuilder(
+    column: $table.pendingReport,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$UsageCountersTableOrderingComposer
+    extends Composer<_$AppDatabase, $UsageCountersTable> {
+  $$UsageCountersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get event => $composableBuilder(
+    column: $table.event,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get documentId => $composableBuilder(
+    column: $table.documentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get latencyMs => $composableBuilder(
+    column: $table.latencyMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get countValue => $composableBuilder(
+    column: $table.countValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get context => $composableBuilder(
+    column: $table.context,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get pendingReport => $composableBuilder(
+    column: $table.pendingReport,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$UsageCountersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $UsageCountersTable> {
+  $$UsageCountersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get event =>
+      $composableBuilder(column: $table.event, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get occurredAt => $composableBuilder(
+    column: $table.occurredAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sessionId =>
+      $composableBuilder(column: $table.sessionId, builder: (column) => column);
+
+  GeneratedColumn<String> get documentId => $composableBuilder(
+    column: $table.documentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get latencyMs =>
+      $composableBuilder(column: $table.latencyMs, builder: (column) => column);
+
+  GeneratedColumn<int> get countValue => $composableBuilder(
+    column: $table.countValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get context =>
+      $composableBuilder(column: $table.context, builder: (column) => column);
+
+  GeneratedColumn<bool> get pendingReport => $composableBuilder(
+    column: $table.pendingReport,
+    builder: (column) => column,
+  );
+}
+
+class $$UsageCountersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $UsageCountersTable,
+          UsageCounter,
+          $$UsageCountersTableFilterComposer,
+          $$UsageCountersTableOrderingComposer,
+          $$UsageCountersTableAnnotationComposer,
+          $$UsageCountersTableCreateCompanionBuilder,
+          $$UsageCountersTableUpdateCompanionBuilder,
+          (
+            UsageCounter,
+            BaseReferences<_$AppDatabase, $UsageCountersTable, UsageCounter>,
+          ),
+          UsageCounter,
+          PrefetchHooks Function()
+        > {
+  $$UsageCountersTableTableManager(_$AppDatabase db, $UsageCountersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$UsageCountersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$UsageCountersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$UsageCountersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String> event = const Value.absent(),
+                Value<DateTime> occurredAt = const Value.absent(),
+                Value<String?> sessionId = const Value.absent(),
+                Value<String?> documentId = const Value.absent(),
+                Value<int?> latencyMs = const Value.absent(),
+                Value<int?> countValue = const Value.absent(),
+                Value<String?> context = const Value.absent(),
+                Value<bool> pendingReport = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => UsageCountersCompanion(
+                id: id,
+                workspaceId: workspaceId,
+                event: event,
+                occurredAt: occurredAt,
+                sessionId: sessionId,
+                documentId: documentId,
+                latencyMs: latencyMs,
+                countValue: countValue,
+                context: context,
+                pendingReport: pendingReport,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String> workspaceId = const Value.absent(),
+                required String event,
+                required DateTime occurredAt,
+                Value<String?> sessionId = const Value.absent(),
+                Value<String?> documentId = const Value.absent(),
+                Value<int?> latencyMs = const Value.absent(),
+                Value<int?> countValue = const Value.absent(),
+                Value<String?> context = const Value.absent(),
+                Value<bool> pendingReport = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => UsageCountersCompanion.insert(
+                id: id,
+                workspaceId: workspaceId,
+                event: event,
+                occurredAt: occurredAt,
+                sessionId: sessionId,
+                documentId: documentId,
+                latencyMs: latencyMs,
+                countValue: countValue,
+                context: context,
+                pendingReport: pendingReport,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$UsageCountersTable, UsageCounter>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $UsageCountersTable,
+                    UsageCounter
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$UsageCountersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $UsageCountersTable,
+      UsageCounter,
+      $$UsageCountersTableFilterComposer,
+      $$UsageCountersTableOrderingComposer,
+      $$UsageCountersTableAnnotationComposer,
+      $$UsageCountersTableCreateCompanionBuilder,
+      $$UsageCountersTableUpdateCompanionBuilder,
+      (
+        UsageCounter,
+        BaseReferences<_$AppDatabase, $UsageCountersTable, UsageCounter>,
+      ),
+      UsageCounter,
+      PrefetchHooks Function()
+    >;
+typedef $$ContentBlobsTableCreateCompanionBuilder =
+    ContentBlobsCompanion Function({
+      required String id,
+      required String sha256Hash,
+      Value<String?> relativePath,
+      Value<String?> legacyPath,
+      required int sizeBytes,
+      required String mimeType,
+      Value<int> refCount,
+      Value<bool> encrypted,
+      Value<bool> localAvailable,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$ContentBlobsTableUpdateCompanionBuilder =
+    ContentBlobsCompanion Function({
+      Value<String> id,
+      Value<String> sha256Hash,
+      Value<String?> relativePath,
+      Value<String?> legacyPath,
+      Value<int> sizeBytes,
+      Value<String> mimeType,
+      Value<int> refCount,
+      Value<bool> encrypted,
+      Value<bool> localAvailable,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$ContentBlobsTableFilterComposer
+    extends Composer<_$AppDatabase, $ContentBlobsTable> {
+  $$ContentBlobsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sha256Hash => $composableBuilder(
+    column: $table.sha256Hash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get relativePath => $composableBuilder(
+    column: $table.relativePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get legacyPath => $composableBuilder(
+    column: $table.legacyPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get refCount => $composableBuilder(
+    column: $table.refCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get encrypted => $composableBuilder(
+    column: $table.encrypted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get localAvailable => $composableBuilder(
+    column: $table.localAvailable,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ContentBlobsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ContentBlobsTable> {
+  $$ContentBlobsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sha256Hash => $composableBuilder(
+    column: $table.sha256Hash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get relativePath => $composableBuilder(
+    column: $table.relativePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get legacyPath => $composableBuilder(
+    column: $table.legacyPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get refCount => $composableBuilder(
+    column: $table.refCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get encrypted => $composableBuilder(
+    column: $table.encrypted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get localAvailable => $composableBuilder(
+    column: $table.localAvailable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ContentBlobsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ContentBlobsTable> {
+  $$ContentBlobsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sha256Hash => $composableBuilder(
+    column: $table.sha256Hash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get relativePath => $composableBuilder(
+    column: $table.relativePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get legacyPath => $composableBuilder(
+    column: $table.legacyPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sizeBytes =>
+      $composableBuilder(column: $table.sizeBytes, builder: (column) => column);
+
+  GeneratedColumn<String> get mimeType =>
+      $composableBuilder(column: $table.mimeType, builder: (column) => column);
+
+  GeneratedColumn<int> get refCount =>
+      $composableBuilder(column: $table.refCount, builder: (column) => column);
+
+  GeneratedColumn<bool> get encrypted =>
+      $composableBuilder(column: $table.encrypted, builder: (column) => column);
+
+  GeneratedColumn<bool> get localAvailable => $composableBuilder(
+    column: $table.localAvailable,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$ContentBlobsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ContentBlobsTable,
+          ContentBlob,
+          $$ContentBlobsTableFilterComposer,
+          $$ContentBlobsTableOrderingComposer,
+          $$ContentBlobsTableAnnotationComposer,
+          $$ContentBlobsTableCreateCompanionBuilder,
+          $$ContentBlobsTableUpdateCompanionBuilder,
+          (
+            ContentBlob,
+            BaseReferences<_$AppDatabase, $ContentBlobsTable, ContentBlob>,
+          ),
+          ContentBlob,
+          PrefetchHooks Function()
+        > {
+  $$ContentBlobsTableTableManager(_$AppDatabase db, $ContentBlobsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ContentBlobsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ContentBlobsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ContentBlobsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> sha256Hash = const Value.absent(),
+                Value<String?> relativePath = const Value.absent(),
+                Value<String?> legacyPath = const Value.absent(),
+                Value<int> sizeBytes = const Value.absent(),
+                Value<String> mimeType = const Value.absent(),
+                Value<int> refCount = const Value.absent(),
+                Value<bool> encrypted = const Value.absent(),
+                Value<bool> localAvailable = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ContentBlobsCompanion(
+                id: id,
+                sha256Hash: sha256Hash,
+                relativePath: relativePath,
+                legacyPath: legacyPath,
+                sizeBytes: sizeBytes,
+                mimeType: mimeType,
+                refCount: refCount,
+                encrypted: encrypted,
+                localAvailable: localAvailable,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String sha256Hash,
+                Value<String?> relativePath = const Value.absent(),
+                Value<String?> legacyPath = const Value.absent(),
+                required int sizeBytes,
+                required String mimeType,
+                Value<int> refCount = const Value.absent(),
+                Value<bool> encrypted = const Value.absent(),
+                Value<bool> localAvailable = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ContentBlobsCompanion.insert(
+                id: id,
+                sha256Hash: sha256Hash,
+                relativePath: relativePath,
+                legacyPath: legacyPath,
+                sizeBytes: sizeBytes,
+                mimeType: mimeType,
+                refCount: refCount,
+                encrypted: encrypted,
+                localAvailable: localAvailable,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ContentBlobsTable, ContentBlob>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ContentBlobsTable,
+                    ContentBlob
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ContentBlobsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ContentBlobsTable,
+      ContentBlob,
+      $$ContentBlobsTableFilterComposer,
+      $$ContentBlobsTableOrderingComposer,
+      $$ContentBlobsTableAnnotationComposer,
+      $$ContentBlobsTableCreateCompanionBuilder,
+      $$ContentBlobsTableUpdateCompanionBuilder,
+      (
+        ContentBlob,
+        BaseReferences<_$AppDatabase, $ContentBlobsTable, ContentBlob>,
+      ),
+      ContentBlob,
+      PrefetchHooks Function()
+    >;
+typedef $$DocumentVersionsTableCreateCompanionBuilder =
+    DocumentVersionsCompanion Function({
+      required String id,
+      required String documentId,
+      Value<String> workspaceId,
+      required int versionNumber,
+      Value<String?> parentVersionId,
+      required String sha256Hash,
+      required String blobId,
+      required String fileName,
+      Value<String?> originalFileName,
+      required int fileSizeBytes,
+      required String mimeType,
+      required String metadataSnapshot,
+      Value<String> originBackend,
+      Value<String?> providerVersionRef,
+      Value<bool> localAvailable,
+      Value<bool> localOnly,
+      Value<String?> changeNote,
+      Value<String> origin,
+      Value<String?> createdByDevice,
+      Value<DateTime> createdAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$DocumentVersionsTableUpdateCompanionBuilder =
+    DocumentVersionsCompanion Function({
+      Value<String> id,
+      Value<String> documentId,
+      Value<String> workspaceId,
+      Value<int> versionNumber,
+      Value<String?> parentVersionId,
+      Value<String> sha256Hash,
+      Value<String> blobId,
+      Value<String> fileName,
+      Value<String?> originalFileName,
+      Value<int> fileSizeBytes,
+      Value<String> mimeType,
+      Value<String> metadataSnapshot,
+      Value<String> originBackend,
+      Value<String?> providerVersionRef,
+      Value<bool> localAvailable,
+      Value<bool> localOnly,
+      Value<String?> changeNote,
+      Value<String> origin,
+      Value<String?> createdByDevice,
+      Value<DateTime> createdAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$DocumentVersionsTableFilterComposer
+    extends Composer<_$AppDatabase, $DocumentVersionsTable> {
+  $$DocumentVersionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get documentId => $composableBuilder(
+    column: $table.documentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get versionNumber => $composableBuilder(
+    column: $table.versionNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentVersionId => $composableBuilder(
+    column: $table.parentVersionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sha256Hash => $composableBuilder(
+    column: $table.sha256Hash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get blobId => $composableBuilder(
+    column: $table.blobId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originalFileName => $composableBuilder(
+    column: $table.originalFileName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fileSizeBytes => $composableBuilder(
+    column: $table.fileSizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metadataSnapshot => $composableBuilder(
+    column: $table.metadataSnapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originBackend => $composableBuilder(
+    column: $table.originBackend,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get providerVersionRef => $composableBuilder(
+    column: $table.providerVersionRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get localAvailable => $composableBuilder(
+    column: $table.localAvailable,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get localOnly => $composableBuilder(
+    column: $table.localOnly,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get changeNote => $composableBuilder(
+    column: $table.changeNote,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get origin => $composableBuilder(
+    column: $table.origin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdByDevice => $composableBuilder(
+    column: $table.createdByDevice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DocumentVersionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DocumentVersionsTable> {
+  $$DocumentVersionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get documentId => $composableBuilder(
+    column: $table.documentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get versionNumber => $composableBuilder(
+    column: $table.versionNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get parentVersionId => $composableBuilder(
+    column: $table.parentVersionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sha256Hash => $composableBuilder(
+    column: $table.sha256Hash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get blobId => $composableBuilder(
+    column: $table.blobId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originalFileName => $composableBuilder(
+    column: $table.originalFileName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fileSizeBytes => $composableBuilder(
+    column: $table.fileSizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get metadataSnapshot => $composableBuilder(
+    column: $table.metadataSnapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originBackend => $composableBuilder(
+    column: $table.originBackend,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get providerVersionRef => $composableBuilder(
+    column: $table.providerVersionRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get localAvailable => $composableBuilder(
+    column: $table.localAvailable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get localOnly => $composableBuilder(
+    column: $table.localOnly,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get changeNote => $composableBuilder(
+    column: $table.changeNote,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get origin => $composableBuilder(
+    column: $table.origin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get createdByDevice => $composableBuilder(
+    column: $table.createdByDevice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DocumentVersionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DocumentVersionsTable> {
+  $$DocumentVersionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get documentId => $composableBuilder(
+    column: $table.documentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get versionNumber => $composableBuilder(
+    column: $table.versionNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get parentVersionId => $composableBuilder(
+    column: $table.parentVersionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sha256Hash => $composableBuilder(
+    column: $table.sha256Hash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get blobId =>
+      $composableBuilder(column: $table.blobId, builder: (column) => column);
+
+  GeneratedColumn<String> get fileName =>
+      $composableBuilder(column: $table.fileName, builder: (column) => column);
+
+  GeneratedColumn<String> get originalFileName => $composableBuilder(
+    column: $table.originalFileName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get fileSizeBytes => $composableBuilder(
+    column: $table.fileSizeBytes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get mimeType =>
+      $composableBuilder(column: $table.mimeType, builder: (column) => column);
+
+  GeneratedColumn<String> get metadataSnapshot => $composableBuilder(
+    column: $table.metadataSnapshot,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get originBackend => $composableBuilder(
+    column: $table.originBackend,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get providerVersionRef => $composableBuilder(
+    column: $table.providerVersionRef,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get localAvailable => $composableBuilder(
+    column: $table.localAvailable,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get localOnly =>
+      $composableBuilder(column: $table.localOnly, builder: (column) => column);
+
+  GeneratedColumn<String> get changeNote => $composableBuilder(
+    column: $table.changeNote,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get origin =>
+      $composableBuilder(column: $table.origin, builder: (column) => column);
+
+  GeneratedColumn<String> get createdByDevice => $composableBuilder(
+    column: $table.createdByDevice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$DocumentVersionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DocumentVersionsTable,
+          DocumentVersion,
+          $$DocumentVersionsTableFilterComposer,
+          $$DocumentVersionsTableOrderingComposer,
+          $$DocumentVersionsTableAnnotationComposer,
+          $$DocumentVersionsTableCreateCompanionBuilder,
+          $$DocumentVersionsTableUpdateCompanionBuilder,
+          (
+            DocumentVersion,
+            BaseReferences<
+              _$AppDatabase,
+              $DocumentVersionsTable,
+              DocumentVersion
+            >,
+          ),
+          DocumentVersion,
+          PrefetchHooks Function()
+        > {
+  $$DocumentVersionsTableTableManager(
+    _$AppDatabase db,
+    $DocumentVersionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DocumentVersionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DocumentVersionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DocumentVersionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> documentId = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<int> versionNumber = const Value.absent(),
+                Value<String?> parentVersionId = const Value.absent(),
+                Value<String> sha256Hash = const Value.absent(),
+                Value<String> blobId = const Value.absent(),
+                Value<String> fileName = const Value.absent(),
+                Value<String?> originalFileName = const Value.absent(),
+                Value<int> fileSizeBytes = const Value.absent(),
+                Value<String> mimeType = const Value.absent(),
+                Value<String> metadataSnapshot = const Value.absent(),
+                Value<String> originBackend = const Value.absent(),
+                Value<String?> providerVersionRef = const Value.absent(),
+                Value<bool> localAvailable = const Value.absent(),
+                Value<bool> localOnly = const Value.absent(),
+                Value<String?> changeNote = const Value.absent(),
+                Value<String> origin = const Value.absent(),
+                Value<String?> createdByDevice = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DocumentVersionsCompanion(
+                id: id,
+                documentId: documentId,
+                workspaceId: workspaceId,
+                versionNumber: versionNumber,
+                parentVersionId: parentVersionId,
+                sha256Hash: sha256Hash,
+                blobId: blobId,
+                fileName: fileName,
+                originalFileName: originalFileName,
+                fileSizeBytes: fileSizeBytes,
+                mimeType: mimeType,
+                metadataSnapshot: metadataSnapshot,
+                originBackend: originBackend,
+                providerVersionRef: providerVersionRef,
+                localAvailable: localAvailable,
+                localOnly: localOnly,
+                changeNote: changeNote,
+                origin: origin,
+                createdByDevice: createdByDevice,
+                createdAt: createdAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String documentId,
+                Value<String> workspaceId = const Value.absent(),
+                required int versionNumber,
+                Value<String?> parentVersionId = const Value.absent(),
+                required String sha256Hash,
+                required String blobId,
+                required String fileName,
+                Value<String?> originalFileName = const Value.absent(),
+                required int fileSizeBytes,
+                required String mimeType,
+                required String metadataSnapshot,
+                Value<String> originBackend = const Value.absent(),
+                Value<String?> providerVersionRef = const Value.absent(),
+                Value<bool> localAvailable = const Value.absent(),
+                Value<bool> localOnly = const Value.absent(),
+                Value<String?> changeNote = const Value.absent(),
+                Value<String> origin = const Value.absent(),
+                Value<String?> createdByDevice = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DocumentVersionsCompanion.insert(
+                id: id,
+                documentId: documentId,
+                workspaceId: workspaceId,
+                versionNumber: versionNumber,
+                parentVersionId: parentVersionId,
+                sha256Hash: sha256Hash,
+                blobId: blobId,
+                fileName: fileName,
+                originalFileName: originalFileName,
+                fileSizeBytes: fileSizeBytes,
+                mimeType: mimeType,
+                metadataSnapshot: metadataSnapshot,
+                originBackend: originBackend,
+                providerVersionRef: providerVersionRef,
+                localAvailable: localAvailable,
+                localOnly: localOnly,
+                changeNote: changeNote,
+                origin: origin,
+                createdByDevice: createdByDevice,
+                createdAt: createdAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$DocumentVersionsTable, DocumentVersion>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $DocumentVersionsTable,
+                    DocumentVersion
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DocumentVersionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DocumentVersionsTable,
+      DocumentVersion,
+      $$DocumentVersionsTableFilterComposer,
+      $$DocumentVersionsTableOrderingComposer,
+      $$DocumentVersionsTableAnnotationComposer,
+      $$DocumentVersionsTableCreateCompanionBuilder,
+      $$DocumentVersionsTableUpdateCompanionBuilder,
+      (
+        DocumentVersion,
+        BaseReferences<_$AppDatabase, $DocumentVersionsTable, DocumentVersion>,
+      ),
+      DocumentVersion,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -9394,4 +13324,10 @@ class $AppDatabaseManager {
       $$CollectionItemsTableTableManager(_db, _db.collectionItems);
   $$SavedViewsTableTableManager get savedViews =>
       $$SavedViewsTableTableManager(_db, _db.savedViews);
+  $$UsageCountersTableTableManager get usageCounters =>
+      $$UsageCountersTableTableManager(_db, _db.usageCounters);
+  $$ContentBlobsTableTableManager get contentBlobs =>
+      $$ContentBlobsTableTableManager(_db, _db.contentBlobs);
+  $$DocumentVersionsTableTableManager get documentVersions =>
+      $$DocumentVersionsTableTableManager(_db, _db.documentVersions);
 }

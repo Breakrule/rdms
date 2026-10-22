@@ -12,6 +12,8 @@ import '../../recovery/presentation/recovery_screen.dart';
 import '../../documents/domain/models/document_item.dart';
 import '../../documents/domain/search_query.dart';
 import '../../documents/presentation/providers/document_providers.dart';
+import '../../metrics/data/metrics_emitters.dart';
+import '../../metrics/domain/metric_event.dart';
 import '../../documents/presentation/widgets/document_visuals.dart';
 import '../../documents/presentation/widgets/sync_status_badge.dart';
 
@@ -78,6 +80,12 @@ class _CommandPaletteModalState extends ConsumerState<CommandPaletteModal> {
 
     if (mounted) setState(() => _isLoading = true);
 
+    // Rev.2 P0.3: interaction latency for docs/METRICS.md §2 M2. The clock
+    // starts here, after any debounce and before the query, so it measures
+    // "commit → first page emitted" — what the user perceives, and the number
+    // the 2-second NFR is about. The query text itself is never recorded.
+    final stopwatch = Stopwatch()..start();
+
     try {
       final repo = ref.read(documentRepositoryProvider);
       // Phase 5.5: parse ALL prefix tokens together (combination, not
@@ -100,6 +108,13 @@ class _CommandPaletteModalState extends ConsumerState<CommandPaletteModal> {
             search: dq.text.isEmpty ? null : dq.text,
           )
           .first;
+      stopwatch.stop();
+      emitSearchExecuted(
+        ref,
+        source: MetricSource.palette,
+        resultCount: results.length,
+        latencyMs: stopwatch.elapsedMilliseconds,
+      );
       if (mounted) setState(() => _searchResults = results);
     } finally {
       if (mounted) setState(() => _isLoading = false);

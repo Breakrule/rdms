@@ -12,6 +12,7 @@ import '../../../../core/widgets/custom_toast.dart';
 import '../../../camera_ocr/presentation/camera_capture_screen.dart';
 import '../../../camera_ocr/presentation/ocr_review_screen.dart';
 import '../providers/document_providers.dart';
+import '../../../metrics/data/metrics_emitters.dart';
 import 'category_selector.dart';
 import 'document_metadata_form.dart';
 import 'duplicate_check_dialog.dart';
@@ -190,6 +191,11 @@ class _AddDocumentModalState extends ConsumerState<AddDocumentModal> {
           matchCount: matches.length,
           sampleTitle: matches.first.title,
         );
+        // Rev.2 P0.3: the duplicate check is PRD metric 3's
+        // `duplicate_filed` guard. Recording the decision (including
+        // "cancelled", which is the check working) is how the 30 % error
+        // reduction claim becomes a number rather than an aspiration.
+        emitDuplicateDecision(ref, decision);
         if (decision != DuplicateChoice.keepSeparate) {
           return;
         }

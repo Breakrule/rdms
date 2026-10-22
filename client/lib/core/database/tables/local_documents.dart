@@ -52,6 +52,20 @@ class LocalDocuments extends Table {
   /// this is user-facing provenance and belongs in the backup manifest.
   TextColumn get originalFileName => text().nullable()();
 
+  /// Rev.2 P1.2 profile scope. Every row on a single-user install belongs to
+  /// the personal workspace; the column exists so P2.5 profile partitioning
+  /// and Appendix T are migrations rather than a rearchitecture (plan §2.2.4).
+  TextColumn get workspaceId =>
+      text().withDefault(
+        const Constant('00000000-0000-4000-8000-000000000001'),
+      )();
+
+  /// Rev.2 P1.2 the version currently in force. Nullable during P1: versions
+  /// are only written once P1.3 rewires import/replace, so existing rows keep
+  /// pointing at nothing until then. Never a foreign-key cascade — deleting a
+  /// version must not delete the document.
+  TextColumn get currentVersionId => text().nullable()();
+
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 

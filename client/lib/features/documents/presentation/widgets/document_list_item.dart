@@ -9,6 +9,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../domain/models/document_item.dart';
 import '../providers/document_providers.dart';
+import '../../../metrics/data/metrics_emitters.dart';
+import '../../../metrics/domain/metric_event.dart';
 import 'document_visuals.dart';
 import 'drive_file_action_dialogs.dart';
 import 'sync_status_badge.dart';
@@ -260,8 +262,13 @@ class _DocumentListItemState extends ConsumerState<DocumentListItem> {
             },
             onLongPress: () =>
                 ref.read(documentSelectionProvider.notifier).toggle(doc.id),
-            onDoubleTap: () =>
-                FileOpenerService.openFile(doc.localFilePath, context),
+            onDoubleTap: () {
+              // Rev.2 P0.3: M2's open event. Emitted before the open so a
+              // failure to open still counts as an attempt (the file may be
+              // missing — that is the signal, not the outcome).
+              emitDocumentOpened(ref, doc, source: MetricSource.list);
+              FileOpenerService.openFile(doc.localFilePath, context);
+            },
             child: AnimatedContainer(
               duration: AppTheme.durationFeedback,
               decoration: BoxDecoration(
@@ -570,6 +577,7 @@ class _DocumentListItemState extends ConsumerState<DocumentListItem> {
       onSelected: (action) async {
         switch (action) {
           case 'open':
+            emitDocumentOpened(ref, doc, source: MetricSource.detail);
             FileOpenerService.openFile(doc.localFilePath, context);
             break;
           case 'open_folder':

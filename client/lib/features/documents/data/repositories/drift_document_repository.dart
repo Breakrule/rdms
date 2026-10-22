@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:document_management/core/database/app_database.dart';
+import 'package:document_management/core/services/content_blob_store.dart';
 import 'package:document_management/core/services/interfaces/i_storage_service.dart';
 import 'package:document_management/core/services/operation_journal.dart';
 import 'package:document_management/core/services/storage_service.dart';
@@ -14,6 +15,12 @@ class DriftDocumentRepository implements DocumentRepository {
   final IStorageService _storageService;
   final OperationJournal? _journal;
   static const _uuid = Uuid();
+
+  /// Rev. 2 P1.1: owns reference counts for managed bytes. Built lazily from
+  /// the same db + storage this repository already holds, so no caller has to
+  /// be rewired and no second source of truth about the storage root appears.
+  late final ContentBlobStore _blobs =
+      ContentBlobStore(db: _db, storage: _storageService);
 
   DriftDocumentRepository({
     required this._db,
@@ -286,7 +293,17 @@ class DriftDocumentRepository implements DocumentRepository {
             targetPath: doc.localFilePath,
           );
     try {
-      await _storageService.deleteManagedFile(doc.localFilePath);
+      // Rev. 2 P1.1 — the R-03 guard. Purging a document must never delete
+      // bytes another version or document still references. When a blob row
+      // exists the store owns the file lifecycle and `release` deletes only at
+      // ref_count 0; when none exists this is pre-P1 data and behaves exactly
+      // as it did before, which is what keeps every existing delete path valid.
+      final blob = await _blobs.findBySha256(doc.sha256Hash);
+      if (blob == null) {
+        await _storageService.deleteManagedFile(doc.localFilePath);
+      } else {
+        await _blobs.release(blob.id);
+      }
       await (_db.delete(_db.localDocuments)..where((t) => t.id.equals(id))).go();
       if (opId != null) await journal!.complete(opId);
     } catch (err) {

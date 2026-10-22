@@ -2,11 +2,13 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'tables/document_replicas.dart';
 import 'tables/drive_upload_sessions.dart';
+import 'tables/document_versions.dart';
 import 'tables/local_documents.dart';
 import 'tables/local_operations.dart';
 import 'tables/organization.dart';
 import 'tables/storage_roots.dart';
 import 'tables/sync_jobs.dart';
+import 'tables/usage_counters.dart';
 
 part 'app_database.g.dart';
 
@@ -24,13 +26,16 @@ part 'app_database.g.dart';
     Collections,
     CollectionItems,
     SavedViews,
+    UsageCounters,
+    ContentBlobs,
+    DocumentVersions,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? _openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   static QueryExecutor _openConnection() {
     return driftDatabase(name: 'dms_local_db');
@@ -68,14 +73,9 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(syncJobs);
             await m.createTable(documentReplicas);
             await m.createTable(driveUploadSessions);
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS idx_sync_jobs_eligible '
-              'ON sync_jobs(status, next_retry_at);',
-            );
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS idx_document_replicas_doc_dest '
-              'ON document_replicas(document_id, destination);',
-            );
+            // idx_sync_jobs_eligible and idx_document_replicas_doc_dest are
+            // created by [_installFtsAndIndexes] so fresh installs get them
+            // too; they used to live only in this block.
           }
           if (from < 4) {
             // Phase 4 additions: favorite/notes/originalFileName on the
@@ -101,10 +101,30 @@ class AppDatabase extends _$AppDatabase {
               "SELECT category, category FROM local_documents "
               "WHERE category IS NOT NULL AND category <> ''",
             );
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS idx_local_docs_favorite '
-              'ON local_documents(is_favorite);',
-            );
+            // idx_local_docs_favorite is created by [_installFtsAndIndexes]
+            // (which runs on BOTH the fresh-install and upgrade paths). It
+            // used to live only here, so every fresh install silently lacked
+            // it — see the note in [_installFtsAndIndexes].
+          }
+          if (from < 5) {
+            // Rev. 2 Phase P0.3: local usage counters. Opt-out by default —
+            // rows are written to this table only, and nothing leaves the
+            // device unless the user enables reporting (P0.5).
+            await m.createTable(usageCounters);
+          }
+          if (from < 6) {
+            // Rev. 2 Phase P1.1/P1.2: the version data model.
+            //
+            // Additive and reversible-in-effect: no existing column is
+            // touched, no file is moved, and `current_version_id` stays NULL
+            // for every pre-existing document until P1.3 starts creating
+            // versions. An upgraded install therefore behaves exactly like a
+            // fresh one for all pre-P1 code paths, which is what the R-08
+            // preservation test checks.
+            await m.createTable(contentBlobs);
+            await m.createTable(documentVersions);
+            await m.addColumn(localDocuments, localDocuments.workspaceId);
+            await m.addColumn(localDocuments, localDocuments.currentVersionId);
           }
           // Rebuild FTS + indexes on every upgrade path so a change to
           // [_installFtsAndIndexes] propagates to existing users without
@@ -126,6 +146,15 @@ class AppDatabase extends _$AppDatabase {
   /// Runs on every fresh install and after every upgrade so schema
   /// drift between a device installed at v1 and one upgraded to vN is
   /// impossible.
+  ///
+  /// RULE: **every index belongs here, not inside a `from < N` block.**
+  /// An index created only inside an upgrade block is absent on every fresh
+  /// install, because `onCreate` never runs those blocks. Three indexes
+  /// (`idx_sync_jobs_eligible`, `idx_document_replicas_doc_dest`,
+  /// `idx_local_docs_favorite`) were in that state until P0 moved them here —
+  /// a live example of plan risk R-08: upgraded installs were fast and fresh
+  /// installs (including every test using `NativeDatabase.memory()`) were
+  /// measuring an unindexed path.
   Future<void> _installFtsAndIndexes() async {
     await customStatement('''
       CREATE VIRTUAL TABLE IF NOT EXISTS local_documents_fts USING fts5(
@@ -176,6 +205,44 @@ class AppDatabase extends _$AppDatabase {
     );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_local_docs_trashed ON local_documents(trashed_at);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_local_docs_favorite ON local_documents(is_favorite);',
+    );
+    // Queue eligibility scan (Phase 2.3) and the per-document replica lookup
+    // both degrade to full scans without these.
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sync_jobs_eligible '
+      'ON sync_jobs(status, next_retry_at);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_document_replicas_doc_dest '
+      'ON document_replicas(document_id, destination);',
+    );
+    // Every metrics query in docs/METRICS.md §2 filters on event + a time
+    // window, so the rollups stay index-only as counters accumulate.
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_usage_counters_event_time '
+      'ON usage_counters(event, occurred_at DESC);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_usage_counters_session '
+      'ON usage_counters(session_id);',
+    );
+    // Version history is read newest-first on every open of the history
+    // screen, and the blob lookup by hash is the dedup path — both must be
+    // index-only at a few thousand versions.
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_doc_versions_document '
+      'ON document_versions(document_id, version_number DESC);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_content_blobs_hash '
+      'ON content_blobs(sha256_hash);',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_local_docs_workspace '
+      'ON local_documents(workspace_id);',
     );
   }
 

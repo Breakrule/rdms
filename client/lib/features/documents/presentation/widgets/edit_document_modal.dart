@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../../../core/widgets/custom_toast.dart';
 import '../../domain/models/document_item.dart';
 import '../providers/document_providers.dart';
+import '../../../metrics/data/metrics_emitters.dart';
+import '../../../metrics/domain/metric_event.dart';
 
 /// Phase 4.1 metadata editor. Mirrors the import form's validation but
 /// every nullable field has an explicit "Hapus nilai" affordance so
@@ -116,6 +118,27 @@ class _EditDocumentModalState extends ConsumerState<EditDocumentModal> {
             _clearExtracted ? null : _extractedController.text.trim(),
         clearExtractedText: _clearExtracted,
       );
+      // Rev.2 P0.3: PRD metric 3's `misfiled` signal is "category corrected
+      // within 7 days of import", so only a REAL diff is recorded — an
+      // unchanged save must not inflate the rate. Values are compared from the
+      // row the repository just returned; no field text is stored.
+      final changedFields = <EditedField>[
+        if (updated.title != widget.document.title) EditedField.title,
+        if (updated.documentNumber != widget.document.documentNumber)
+          EditedField.documentNumber,
+        if (updated.category != widget.document.category) EditedField.category,
+        if (updated.documentDate != widget.document.documentDate)
+          EditedField.documentDate,
+        if (updated.fiscalYear != widget.document.fiscalYear)
+          EditedField.fiscalYear,
+        if (updated.notes != widget.document.notes) EditedField.notes,
+      ];
+      emitMetadataEdited(
+        ref,
+        document: widget.document,
+        fields: changedFields,
+      );
+
       // Queue only the backend metadata job (never a Drive upload).
       final binding = await ref.read(syncAccountBindingProvider.future);
       await ref

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../document_explorer/presentation/document_explorer_screen.dart';
 import '../../documents/presentation/providers/document_providers.dart';
+import '../../metrics/presentation/metrics_providers.dart';
 
 /// Instant, smoothly animated Splash Screen with immediate visual presence,
 /// gentle scale and breathing glow effects, eliminating blank/black startup gaps.
@@ -32,6 +33,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   void initState() {
     super.initState();
+
+    // Rev.2 P0.3: one `session_start` counter per app launch. Read, not
+    // watched — resolving the metrics service here must not add a
+    // database-backed dependency to any build() path. The write is
+    // fire-and-forget and swallows its own failures, so a first launch
+    // before the database exists simply records nothing.
+    ref.read(metricsServiceProvider).recordSessionStart();
 
     _controller = AnimationController(
       vsync: this,
